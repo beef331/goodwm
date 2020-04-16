@@ -1,5 +1,6 @@
 import x11/xlib,x11/x
 import strformat
+import config
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -10,13 +11,11 @@ converter toBool(x: TBool): bool = x.bool
 
 type
     Workspace = ref object of RootObj
-        main: int
         windows : seq[TWindow]
 
 
-proc mainWindow(a : Workspace):TWindow = a.windows[a.main]
-proc count(a : Workspace): int = a.windows.len
-proc newWorkspace(): Workspace = Workspace(main : -1)
+proc mainWindow(a : Workspace):TWindow = a.windows[0]
+proc wincount(a : Workspace): int = a.windows.len
 
 var
     display:PDisplay
@@ -31,11 +30,11 @@ var
 
 proc selectedWorkspace() : var Workspace = workspaces[selected]
 
-proc drawHorizontalTiled(wSpace:Workspace)=
+proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
-
+    let workspace = selectedWorkspace()
     #We dont have any windows, dont draw
-    if(wSpace.windows.len == 0): return
+    if(workspace.wincount == 0): return
 
     let flag :cint = CWX or CWY or CWHeight or CWWidth
 
@@ -43,31 +42,72 @@ proc drawHorizontalTiled(wSpace:Workspace)=
     windowValues.x = 0
     windowValues.y = 0
     #horz is evenly scaled so we know the width
-    windowValues.width = cint(screenWidth.div(wSpace.windows.len))
+    windowValues.width = cint(screenWidth.div(workspace.windows.len))
     #Add bar height later
     windowValues.height = screenHeight-30
-    discard XConfigureWindow(display,wSpace.mainWindow,flag,addr windowValues)
-    for window in wSpace.windows:
-        if(window == wSpace.mainWindow):continue
+    discard XConfigureWindow(display,workspace.mainWindow,flag,addr windowValues)
+    for window in workspace.windows:
+        if(window == workspace.mainWindow):continue
         windowValues.x += windowValues.width
         discard XConfigureWindow(display,window,flag,addr windowValues)
 
+proc drawLeftAlternatingSplit()=
+    ##Draw Main left with alternating split
+    let workspace = selectedWorkspace()
+
+    #We dont have any windows, dont draw
+    if(workspace.wincount == 0): return
+
+    let flag :cint = CWX or CWY or CWHeight or CWWidth
+
+    var windowValues = TXWindowChanges()
+    windowValues.x = 0
+    windowValues.y = 0
+    #First window takes up a majority of space
+    windowValues.width = screenWidth
+    #Add bar height later
+    windowValues.height = screenHeight-30
+    var splitVert = true
+    for i in 0..<workspace.wincount:
+        let window = workspace.windows[i]
+        let hasNext = (i < workspace.wincount - 1)
+        if(splitVert): 
+            if(i > 0): windowValues.y += windowValues.height
+            if(hasNext): windowValues.width = windowValues.width.div(2)
+        else: 
+            if(i > 0): windowValues.x += windowValues.width
+            if(hasNext): windowValues.height = windowValues.height.div(2)
+        discard XConfigureWindow(display,window,flag,addr windowValues)
+        splitVert = not splitVert
+
+
+var 
+    drawMode : proc() = drawLeftAlternatingSplit
+
+proc moveWindowsHorz(right : bool = true)=
+    var temp = selectedWorkspace().windows
+    var workspace = selectedWorkspace()
+    let dir = if(right): -1 else: 1
+    for i in 0..<temp.len:
+        let index = (i + dir + temp.len) %% temp.len
+        workspace.windows[i] = temp[index]
+    drawMode()
+
 proc errorHandler(disp: PDisplay, error: PXErrorEvent):cint{.cdecl.}=
-  echo error.theType
+    echo error.theType
 
 
 proc setup()=
-  display = XOpenDisplay(nil)
+    display = XOpenDisplay(nil)
 
-  if display == nil:
-    quit "Failed to open display"
-  
-  screen = DefaultScreen(display)
-  screenWidth = DisplayWidth(display,screen)
-  screenHeight = DisplayHeight(display,screen)
-  root = RootWindow(display,screen)
-  discard XSetErrorHandler(errorHandler)
-  discard XSelectInput(display,
+    if display == nil:
+        quit "Failed to open display"
+    screen = DefaultScreen(display)
+    screenWidth = DisplayWidth(display,screen)
+    screenHeight = DisplayHeight(display,screen)
+    root = RootWindow(display,screen)
+    discard XSetErrorHandler(errorHandler)
+    discard XSelectInput(display,
                     root,
                     SubstructureRedirectMask or
                     SubstructureNotifyMask or
@@ -76,14 +116,18 @@ proc setup()=
                     KeyPressMask or
                     KeyReleaseMask)
 
-  discard XSync(display,false)
+    discard XSync(display,false)
+
+    #add action procs
+    addAction(MoveRight,proc()=moveWindowsHorz(true))
+    addAction(MoveLeft,proc()=moveWindowsHorz(false))
+
 
 proc onWindowCreation(e: TXCreateWindowEvent) =
     var workspace = workspaces[0]
-    if(workspace.windows.len == -1): workspace.main = 0
     workspace.windows.add(e.window)
     discard XMapWindow(display,e.window)
-    drawHorizontalTiled(workspace)
+    drawMode()
     discard XSelectInput(display,
                 e.window,
                 SubstructureRedirectMask or
@@ -98,28 +142,27 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
     var workspace = selectedWorkspace()
     var toDelete = -1
 
-    #Get window to delete
-    for window in 0..<workspace.windows.len:
-        if(workspace.windows[window] == e.window):
-            toDelete = window
-            break
+    if(workspace.wincount > 1):
+        #Get window to delete
+        for window in 0..<workspace.windows.len:
+            if(workspace.windows[window] == e.window):
+                toDelete = window
+                break
 
-    #Remove window
-    if(toDelete >= 0):
-        if(workspace.windows[toDelete] == workspace.mainWindow):
-            let newIndex = (toDelete + 1 + workspace.windows.len) %% workspace.windows.len
-            workspace.main = newIndex
-        workspace.windows.delete(toDelete)
-    drawHorizontalTiled(workspace)
+        #Remove window
+        if(toDelete >= 0 ):
+            workspace.windows.delete(toDelete)
+            if(workspace.wincount > 0):
+                drawMode()
+    else: 
+        workspace.windows.setLen(0)
+        drawMode()
 
 proc onKeyPress(e : TXKeyEvent)=
     var workspace = selectedWorkspace()
-    case(e.keyCode):
-    of 113:
-        if(workspace.windows.len <= 1): return
-        workspace.main = (workspace.main + 1 + workspace.count).mod(workspace.count)
-        drawHorizontalTiled(workspace)
-    else: discard
+    var strName = XKeycodeToKeysym(display,TKeyCode(e.keycode),0).XKeysymToString()
+    echo fmt"{e.keycode} is {strName}"
+    doKeycodeAction(e.keycode)
 
 proc onKeyRelease(e : TXKeyEvent)=
     case(e.keyCode):
