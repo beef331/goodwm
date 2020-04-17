@@ -1,6 +1,9 @@
 import x11/xlib,x11/x
 import strformat
+import strutils
 import config
+import osproc
+import nre
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -9,10 +12,14 @@ converter toTBool(x: bool): TBool = x.TBool
 converter toBool(x: TBool): bool = x.bool
 
 
-type
+type 
     Workspace = ref object of RootObj
         windows : seq[TWindow]
-
+    Screen = ref object of RootObj
+        width,height,xOffset,yOffset : cint
+        drawMode : proc()
+        activeWorkspace : int
+        workspaces : seq[Workspace]
 
 proc mainWindow(a : Workspace):TWindow = a.windows[0]
 proc wincount(a : Workspace): int = a.windows.len
@@ -24,11 +31,12 @@ var
     start:TXButtonEvent
     mask : clong
     running: bool = true
-    screen,screenWidth,screenHeight : cint
-    workspaces = @[Workspace()]
+    screen : cint
+    screens : seq[Screen]
     selected = 0
 
-proc selectedWorkspace() : var Workspace = workspaces[selected]
+proc `selectedScreen`() : var Screen = screens[selected]
+proc selectedWorkspace() : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
 
 proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
@@ -42,9 +50,9 @@ proc drawHorizontalTiled()=
     windowValues.x = 0
     windowValues.y = 0
     #horz is evenly scaled so we know the width
-    windowValues.width = cint(screenWidth.div(workspace.windows.len))
+    windowValues.width = cint(selectedScreen().width.div(workspace.windows.len))
     #Add bar height later
-    windowValues.height = screenHeight-30
+    windowValues.height = selectedScreen().height-30
     discard XConfigureWindow(display,workspace.mainWindow,flag,addr windowValues)
     for window in workspace.windows:
         if(window == workspace.mainWindow):continue
@@ -61,12 +69,12 @@ proc drawLeftAlternatingSplit()=
     let flag :cint = CWX or CWY or CWHeight or CWWidth
 
     var windowValues = TXWindowChanges()
-    windowValues.x = 0
-    windowValues.y = 0
+    windowValues.x = selectedScreen().xOffset
+    windowValues.y = selectedScreen().yOffset
     #First window takes up a majority of space
-    windowValues.width = screenWidth
+    windowValues.width = selectedScreen().width
     #Add bar height later
-    windowValues.height = screenHeight-30
+    windowValues.height = selectedScreen().height-30
     var splitVert = true
     for i in 0..<workspace.wincount:
         let window = workspace.windows[i]
@@ -81,9 +89,6 @@ proc drawLeftAlternatingSplit()=
         splitVert = not splitVert
 
 
-var 
-    drawMode : proc() = drawLeftAlternatingSplit
-
 proc moveWindowsHorz(right : bool = true)=
     var temp = selectedWorkspace().windows
     var workspace = selectedWorkspace()
@@ -91,21 +96,46 @@ proc moveWindowsHorz(right : bool = true)=
     for i in 0..<temp.len:
         let index = (i + dir + temp.len) %% temp.len
         workspace.windows[i] = temp[index]
-    drawMode()
+    selectedScreen().drawMode()
 
 proc errorHandler(disp: PDisplay, error: PXErrorEvent):cint{.cdecl.}=
     echo error.theType
 
+proc loadScreens()=
+    let monitorReg = re"\d:.*"
+    let sizeReg = re"\d*\/"
+    let offsetReg = re"\+[\d]+"
+    let xrandrResponse = execCmdEx("xrandr --listactivemonitors").output.findAll(monitorReg)
+    var screenIndex = 0
+    for line in xrandrResponse:
+        var screen = Screen()
+        let size = line.findAll(sizeReg)
+        let offset = line.findAll(offsetReg)
+        if(size.len != 2 or offset.len != 2): quit "Cant find monitors"
+        screen.width = parseInt(size[0].replace("/")).cint
+        screen.height = parseInt(size[1].replace("/")).cint
+        screen.xOffset = parseInt(offset[0].replace("+")).cint
+        screen.yOffset = parseInt(offset[1].replace("+")).cint
+        screen.workspaces.add(Workspace())
+        case(getScreenLayout(screenIndex)):
+        of Horizontal:
+            screen.drawMode = drawHorizontalTiled
+        of LeftAlternating:
+            screen.drawMode = drawLeftAlternatingSplit
+        else: screen.drawMode = drawHorizontalTiled
+            
+        screens.add(screen)
+        echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
 proc setup()=
+    loadScreens()
     display = XOpenDisplay(nil)
 
     if display == nil:
         quit "Failed to open display"
     screen = DefaultScreen(display)
-    screenWidth = DisplayWidth(display,screen)
-    screenHeight = DisplayHeight(display,screen)
     root = RootWindow(display,screen)
+    
     discard XSetErrorHandler(errorHandler)
     discard XSelectInput(display,
                     root,
@@ -115,8 +145,16 @@ proc setup()=
                     ButtonReleaseMask or
                     KeyPressMask or
                     KeyReleaseMask)
-
     discard XSync(display,false)
+    discard XGrabKey(
+      display,
+      XKeysymToKeycode(display, XStringToKeysym("left")),
+      Mod1Mask,
+      root,
+      false,
+      KeyPressMask or KeyReleaseMask,
+      GrabModeAsync)
+
 
     #add action procs
     addAction(MoveRight,proc()=moveWindowsHorz(true))
@@ -124,10 +162,10 @@ proc setup()=
 
 
 proc onWindowCreation(e: TXCreateWindowEvent) =
-    var workspace = workspaces[0]
+    var workspace = selectedWorkspace()
     workspace.windows.add(e.window)
     discard XMapWindow(display,e.window)
-    drawMode()
+    selectedScreen().drawMode()
     discard XSelectInput(display,
                 e.window,
                 SubstructureRedirectMask or
@@ -152,11 +190,9 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
         #Remove window
         if(toDelete >= 0 ):
             workspace.windows.delete(toDelete)
-            if(workspace.wincount > 0):
-                drawMode()
-    else: 
-        workspace.windows.setLen(0)
-        drawMode()
+            workspace.windows.setLen(workspace.wincount()-1)
+
+    selectedScreen().drawMode()
 
 proc onKeyPress(e : TXKeyEvent)=
     var workspace = selectedWorkspace()
@@ -176,7 +212,7 @@ proc onButtonReleased(e:TXButtonEvent)=
 
 proc run()=
     setup()
-    echo fmt"Screen is {screenWidth} X {screenHeight}"
+
     while running:
         var ev : TXEvent = TXEvent() 
         discard XNextEvent(display,ev.addr)
