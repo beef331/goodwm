@@ -7,7 +7,15 @@ import x11/xlib
 type
     #These are for WM actions customizabillity
     Action* = enum
-        MoveLeft,MoveRight,CloseWindow,MoveToWorkspace,MoveScreenLeft,MoveScreenRight,FocusRight,FocusLeft,MakeMain
+        MoveLeft,
+        MoveRight,
+        CloseWindow,
+        MoveToWorkspace,
+        MoveScreenLeft,
+        MoveScreenRight,
+        FocusRight,
+        FocusLeft,
+        MakeMain
     Layout* = enum
         LeftAlternating,LeftSpiral,Horizontal,Vertical
     KeyConfig* = ref object
@@ -53,7 +61,9 @@ proc loadConfig* (display : PDisplay)=
     var focusRight = newKeyConfig(114,Mod4Mask,nil)
     var makeMain = newKeyConfig(58,ControlMask or Mod4Mask,nil)
     var moveScreenRight = newKeyConfig(113,Mod4Mask or ControlMask,nil)
-    var moveScreenLeft = newKeyConfig(113,Mod4Mask or ControlMask,nil)
+    var moveScreenLeft = newKeyConfig(114,Mod4Mask or ControlMask,nil)
+    var closeWindow = newKeyConfig(24,Mod4Mask or ShiftMask,nil)
+
 
     addInput(moveLeft)
     addInput(moveRight)
@@ -62,6 +72,7 @@ proc loadConfig* (display : PDisplay)=
     addInput(makeMain)
     addInput(moveScreenRight)
     addInput(moveScreenLeft)
+    addInput(closeWindow)
 
     actionToConfigs.add(MoveLeft,moveLeft)
     actionToConfigs.add(MoveRight,moveRight)
@@ -70,6 +81,7 @@ proc loadConfig* (display : PDisplay)=
     actionToConfigs.add(MakeMain,makeMain)
     actionToConfigs.add(MoveScreenRight,moveScreenRight)
     actionToConfigs.add(MoveScreenLeft, moveScreenLeft)
+    actionToConfigs.add(CloseWindow,closeWindow)
 
 
 

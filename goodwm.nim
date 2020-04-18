@@ -45,8 +45,13 @@ proc `[]`(w : var Workspace, index : int) : TWindow = w.windows[index]
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
 
-proc getFocus()=
-    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
+proc getFocus(moveCursor : bool = false)=
+    if(activeWindow() != root):
+        if(moveCursor):
+            var winAttr = TXWindowAttributes()
+            discard XGetWindowAttributes(display,activeWindow(),winAttr.addr)
+            discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+        discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
 
 proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
@@ -79,7 +84,7 @@ proc drawVerticalTiled()=
         height = cint((selScreen.height - 30).div(workspace.windows.len))
 
     for window in workspace.windows:
-        x += height
+        y += height
         discard XMoveResizeWindow(display,window,x,y,width,height)
 
 proc drawLeftAlternatingSplit()=
@@ -118,15 +123,16 @@ proc drawLeftAlternatingSplit()=
 
 
 proc moveWindowsHorz(right : bool = true)=
-    let sourceIndex = selectedWorkspace().activeWindow
-    let activeWindow = activeWindow()
+    var workspace = selectedWorkspace()
+    let sourceIndex = workspace.activeWindow
+    let activeWindow = workspace.windows[workspace.activeWindow]
     let dir = if(right): 1 else: -1
-    let swapIndex = (sourceIndex + dir + selectedWorkspace().wincount) %% selectedWorkspace().wincount
-    selectedWorkspace().activeWindow = swapIndex
-    selectedWorkspace().windows[sourceIndex] = selectedWorkspace().windows[swapIndex]
-    selectedWorkspace().windows[swapIndex] = activeWindow
+    let swapIndex = (sourceIndex + dir + workspace.wincount) %% workspace.wincount
+    workspace.activeWindow = swapIndex
+    workspace.windows[sourceIndex] =workspace.windows[swapIndex]
+    workspace.windows[swapIndex] = activeWindow
     selectedScreen().drawMode()
-    getFocus()
+    getFocus(true)
 
 proc moveWindowToScreen(right : bool = true)=
     let activeWindow = activeWindow()
@@ -140,7 +146,7 @@ proc moveWindowToScreen(right : bool = true)=
     selectedWorkspace().windows.add(activeWindow)
     selectedWorkspace().activeWindow = selectedWorkspace().windows.high
     selectedScreen().drawMode()
-    getFocus()
+    getFocus(true)
 
 proc makeFocusedMain()=
     if(selectedWorkspace().wincount() < 1): return
@@ -150,7 +156,7 @@ proc makeFocusedMain()=
     workspace.windows[focused] = workspace.windows[0]
     workspace.windows[0] = temp
     workspace.activeWindow = 0
-    getFocus()
+    getFocus(true)
     selectedScreen().drawMode()
 
 proc moveFocusHorz(right : bool = true)=
@@ -158,8 +164,17 @@ proc moveFocusHorz(right : bool = true)=
     let dir = if(right): 1 else : -1
     index = (index + dir + selectedWorkspace().wincount()) %% selectedWorkspace().wincount()
     selectedWorkspace().activeWindow = index
-    getFocus()
+    getFocus(true)
 
+proc closeWindow()=
+    var ev = TXEvent()
+    ev.xclient.theType = ClientMessage
+    ev.xclient.window = activeWindow()
+    ev.xclient.message_type = XInternAtom(display,"WM_PROTOCOLS",true)
+    ev.xclient.format = 32
+    ev.xclient.data.l[0] = XInternAtom(display,"WM_DELETE_WINDOW",false).cint
+    ev.xclient.data.l[1] = CurrentTime
+    discard XSendEvent(display,activeWindow(),false,NoEventMask,ev.addr)
 
 proc errorHandler(disp: PDisplay, error: PXErrorEvent):cint{.cdecl.}=
     echo error.theType
@@ -244,6 +259,7 @@ proc setup()=
     getActionConfig(MakeMain).action = makeFocusedMain
     getActionConfig(MoveScreenRight).action = proc() = moveWindowToScreen(true)
     getActionConfig(MoveScreenLeft).action = proc() = moveWindowToScreen(false)
+    getActionConfig(CloseWindow).action = closeWindow
 
 
 
@@ -299,12 +315,18 @@ proc onButtonReleased(e:TXButtonEvent)=
     echo e.button
 
 proc onEnterWindow(e : TXCrossingEvent)=
-    var workspace = selectedWorkspace()
-    for i in 0..<workspace.wincount:
-        if(workspace[i] == e.window):
-            workspace.activeWindow = i
-            getFocus()
-            return
+    for x in 0..<screens.len:
+        var screen = screens[x]
+
+        var workspace = screen.workspaces[screen.activeWorkspace]
+        for i in 0..<workspace.wincount:
+            if(workspace[i] == e.window):
+                selected = x
+                workspace.activeWindow = i
+                getFocus()
+                return
+        if(e.x >= screen.xOffset and e.y >= screen.yOffset and e.x <= (screen.width + screen.xOffset) and e.y <= (screen.width + screen.yOffset)):
+            selected = x
 
 
 proc run()=
