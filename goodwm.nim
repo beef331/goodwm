@@ -83,12 +83,14 @@ proc drawVerticalTiled()=
         width = selScreen.width
         height = cint((selScreen.height - 30).div(workspace.windows.len))
 
-    for window in workspace.windows:
-        y += height
+    for i in 0..<workspace.wincount:
+        let window = workspace.windows[i]
+        if(i > 0): y += height
         discard XMoveResizeWindow(display,window,x,y,width,height)
 
 proc drawLeftAlternatingSplit()=
     ##Draw Main left with alternating split
+
     let workspace = selectedWorkspace()
 
     #We dont have any windows, dont draw
@@ -124,6 +126,7 @@ proc drawLeftAlternatingSplit()=
 
 proc moveWindowsHorz(right : bool = true)=
     var workspace = selectedWorkspace()
+    if(workspace.wincount <= 1): return
     let sourceIndex = workspace.activeWindow
     let activeWindow = workspace.windows[workspace.activeWindow]
     let dir = if(right): 1 else: -1
@@ -135,6 +138,7 @@ proc moveWindowsHorz(right : bool = true)=
     getFocus(true)
 
 proc moveWindowToScreen(right : bool = true)=
+    if(selectedWorkspace().wincount() == 0): return
     let activeWindow = activeWindow()
     let dir = if(right): 1 else : -1
     let index = selectedWorkspace().activeWindow
@@ -203,7 +207,7 @@ proc loadScreens()=
         of Vertical:
             screen.drawMode = drawVerticalTiled
         else: screen.drawMode = drawHorizontalTiled
-            
+        inc(screenIndex)
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
