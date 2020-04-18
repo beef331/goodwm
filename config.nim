@@ -66,7 +66,7 @@ proc loadConfig* (display : PDisplay)=
     actionToConfigs.add(MakeMain,makeMain)
 
     screenLayout.add(0,LeftAlternating)
-    screenLayout.add(1,Horizontal)
+    screenLayout.add(1,Vertical)
 
 proc keyConfs* : seq[KeyConfig] = keyConfigs
 

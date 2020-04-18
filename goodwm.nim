@@ -40,6 +40,8 @@ proc selectedScreen : var Screen = screens[selected]
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
 proc activeWindow : var TWindow = selectedWorkspace().windows[selectedWorkspace().activeWindow]
 proc `[]=`(w : var Workspace, index : int, win : TWindow) = w.windows[index] = win
+proc `[]`(w : var Workspace, index : int) : TWindow = w.windows[index]
+
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
 proc drawHorizontalTiled()=
@@ -57,6 +59,23 @@ proc drawHorizontalTiled()=
 
     for window in workspace.windows:
         x += width
+        discard XMoveResizeWindow(display,window,x,y,width,height)
+
+proc drawVerticalTiled()=
+    ##Make windows horizontally tiled
+    let workspace = selectedWorkspace()
+    #We dont have any windows, dont draw
+    if(workspace.wincount == 0): return
+
+    var 
+        selScreen = selectedScreen()
+        x = selScreen.xOffset
+        y = selScreen.yOffset
+        width = selScreen.width
+        height = cint((selScreen.height - 30).div(workspace.windows.len))
+
+    for window in workspace.windows:
+        x += height
         discard XMoveResizeWindow(display,window,x,y,width,height)
 
 proc drawLeftAlternatingSplit()=
@@ -105,9 +124,7 @@ proc moveWindowsHorz(right : bool = true)=
     selectedScreen().drawMode()
 
 proc getFocus()=
-    var revert : cint = RevertToParent
-    var workspace = selectedWorkspace()
-    discard XGetInputFocus(display, workspace.windows[workspace.activeWindow].addr ,addr revert)
+    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
 
 proc makeFocusedMain()=
     if(selectedWorkspace().wincount() < 1): return
@@ -151,6 +168,8 @@ proc loadScreens()=
             screen.drawMode = drawHorizontalTiled
         of LeftAlternating:
             screen.drawMode = drawLeftAlternatingSplit
+        of Vertical:
+            screen.drawMode = drawVerticalTiled
         else: screen.drawMode = drawHorizontalTiled
             
         screens.add(screen)
@@ -178,7 +197,9 @@ proc setup()=
                     EnterWindowMask or
                     LeaveWindowMask or
                     PropertyChangeMask or
-                    PointerMotionMask
+                    PointerMotionMask or
+                    EnterWindowMask or
+                    LeaveWindowMask
     
     discard XChangeWindowAttributes(display,root,CWEventMask or CWCursor, wa.addr)
 
@@ -198,6 +219,7 @@ proc setup()=
         GrabModeAsync,
         GrabModeAsync)
 
+
     getActionConfig(MoveLeft).action = proc() = moveWindowsHorz(false)
     getActionConfig(MoveRight).action = proc() = moveWindowsHorz(true)
     getActionConfig(FocusLeft).action = proc() = moveFocusHorz(false)
@@ -212,20 +234,11 @@ proc frameWindow(w : TWindow)=
     discard XAddToSaveSet(display,w)
     workspace.windows.add(w)
 
-    discard XReparentWindow(display,root,w,0,0)
     discard XSelectInput(display,w,
-                    SubstructureRedirectMask or
-                    SubstructureNotifyMask or
-                    StructureNotifyMask or
-                    ButtonPressMask or
-                    ButtonReleaseMask or
-                    KeyPressMask or
-                    KeyReleaseMask or 
-                    EnterWindowMask or
-                    LeaveWindowMask or
-                    PropertyChangeMask or
-                    PointerMotionMask)
+                        EnterWindowMask or
+                        LeaveWindowMask)
 
+    discard XReparentWindow(display,root,w,0,0)
     selectedScreen().drawMode()
     discard XMapWindow(display,w)
 
@@ -265,21 +278,13 @@ proc onButtonPressed(e:TXButtonEvent)=
 proc onButtonReleased(e:TXButtonEvent)=
     echo e.button
 
-proc onMouseMoved(e:TXMotionEvent)=
-    var index = 0
-    for screen in screens:
-        if(e.x >= screen.xOffset and e.x <= (screen.xOffset + screen.width) and e.y >= screen.yOffset and e.y <= (screen.yOffset + screen.height)):
-            selected = index
-            index = 0
-            for window in selectedWorkspace().windows:
-                var winAttr = TXWindowAttributes()
-                discard XGetWindowAttributes(display,window,winAttr.addr)
-                if(e.x >= winAttr.x and e.x <= (winAttr.x + winAttr.width) and e.y >= winAttr.y and e.y <= (winAttr.y + winAttr.height)):
-                    selectedWorkspace().activeWindow = index
-                    getFocus()
-                    return
-                inc(index)
-        inc(index)
+proc onEnterWindow(e : TXCrossingEvent)=
+    var workspace = selectedWorkspace()
+    for i in 0..<workspace.wincount:
+        if(workspace[i] == e.window):
+            workspace.activeWindow = i
+            getFocus()
+            return
 
 
 proc run()=
@@ -301,8 +306,8 @@ proc run()=
             onButtonPressed(ev.xbutton)
         of ButtonRelease:
             onButtonReleased(ev.xbutton)
-        of MotionNotify:
-            onMouseMoved(ev.xmotion)
+        of EnterNotify:
+            onEnterWindow(ev.xcrossing)
         else: discard
 
 run()
