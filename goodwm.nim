@@ -44,6 +44,10 @@ proc `[]`(w : var Workspace, index : int) : TWindow = w.windows[index]
 
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
+
+proc getFocus()=
+    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
+
 proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
     let workspace = selectedWorkspace()
@@ -114,17 +118,29 @@ proc drawLeftAlternatingSplit()=
 
 
 proc moveWindowsHorz(right : bool = true)=
-    echo fmt"Move Window {right}"
-    var temp = selectedWorkspace().windows
-    var workspace = selectedWorkspace()
-    let dir = if(right): -1 else: 1
-    for i in 0..<temp.len:
-        let index = (i + dir + temp.len) %% temp.len
-        workspace.windows[i] = temp[index]
+    let sourceIndex = selectedWorkspace().activeWindow
+    let activeWindow = activeWindow()
+    let dir = if(right): 1 else: -1
+    let swapIndex = (sourceIndex + dir + selectedWorkspace().wincount) %% selectedWorkspace().wincount
+    selectedWorkspace().activeWindow = swapIndex
+    selectedWorkspace().windows[sourceIndex] = selectedWorkspace().windows[swapIndex]
+    selectedWorkspace().windows[swapIndex] = activeWindow
+    selectedScreen().drawMode()
+    getFocus()
+
+proc moveWindowToScreen(right : bool = true)=
+    let activeWindow = activeWindow()
+    let dir = if(right): 1 else : -1
+    let index = selectedWorkspace().activeWindow
+    selectedWorkspace().windows.delete(index)
+    selectedWorkspace().activeWindow = index - 1
     selectedScreen().drawMode()
 
-proc getFocus()=
-    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
+    selected = (selected + dir + screens.len) %% screens.len
+    selectedWorkspace().windows.add(activeWindow)
+    selectedWorkspace().activeWindow = selectedWorkspace().windows.high
+    selectedScreen().drawMode()
+    getFocus()
 
 proc makeFocusedMain()=
     if(selectedWorkspace().wincount() < 1): return
@@ -135,10 +151,11 @@ proc makeFocusedMain()=
     workspace.windows[0] = temp
     workspace.activeWindow = 0
     getFocus()
+    selectedScreen().drawMode()
 
 proc moveFocusHorz(right : bool = true)=
     var index = selectedWorkspace().activeWindow
-    let dir = if(right): 1 else : 1
+    let dir = if(right): 1 else : -1
     index = (index + dir + selectedWorkspace().wincount()) %% selectedWorkspace().wincount()
     selectedWorkspace().activeWindow = index
     getFocus()
@@ -225,6 +242,9 @@ proc setup()=
     getActionConfig(FocusLeft).action = proc() = moveFocusHorz(false)
     getActionConfig(FocusRight).action = proc() = moveFocusHorz(true)
     getActionConfig(MakeMain).action = makeFocusedMain
+    getActionConfig(MoveScreenRight).action = proc() = moveWindowToScreen(true)
+    getActionConfig(MoveScreenLeft).action = proc() = moveWindowToScreen(false)
+
 
 
 

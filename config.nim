@@ -44,26 +44,34 @@ proc getScreenLayout*(screen : int):Layout =
 
 proc loadConfig* (display : PDisplay)=
     var launcherCode = XKeysymToKeycode(display, XStringToKeysym("d")).cuint
-    var launcherCfg = newKeyConfig(launcherCode,Mod1Mask,proc()= discard execShellCmd("rofi -show run"))
+    var launcherCfg = newKeyConfig(launcherCode,Mod4Mask,proc()= discard execShellCmd("rofi -show run"))
     addInput(launcherCfg)
 
-    var moveLeft = newKeyConfig(113,Mod1Mask,nil)
-    var moveRight = newKeyConfig(114,Mod1Mask,nil)
-    var focusLeft = newKeyConfig(113,ControlMask,nil)
-    var focusRight = newKeyConfig(114,ControlMask,nil)
-    var makeMain = newKeyConfig(58,ControlMask or Mod1Mask,nil)
-    
+    var moveLeft = newKeyConfig(113,Mod4Mask or ShiftMask,nil)
+    var moveRight = newKeyConfig(114,Mod4Mask or ShiftMask,nil)
+    var focusLeft = newKeyConfig(113,Mod4Mask,nil)
+    var focusRight = newKeyConfig(114,Mod4Mask,nil)
+    var makeMain = newKeyConfig(58,ControlMask or Mod4Mask,nil)
+    var moveScreenRight = newKeyConfig(113,Mod4Mask or ControlMask,nil)
+    var moveScreenLeft = newKeyConfig(113,Mod4Mask or ControlMask,nil)
+
     addInput(moveLeft)
     addInput(moveRight)
     addInput(focusLeft)
     addInput(focusRight)
     addInput(makeMain)
+    addInput(moveScreenRight)
+    addInput(moveScreenLeft)
 
     actionToConfigs.add(MoveLeft,moveLeft)
     actionToConfigs.add(MoveRight,moveRight)
     actionToConfigs.add(FocusLeft,focusLeft)
     actionToConfigs.add(FocusRight,focusRight)
     actionToConfigs.add(MakeMain,makeMain)
+    actionToConfigs.add(MoveScreenRight,moveScreenRight)
+    actionToConfigs.add(MoveScreenLeft, moveScreenLeft)
+
+
 
     screenLayout.add(0,LeftAlternating)
     screenLayout.add(1,Vertical)
