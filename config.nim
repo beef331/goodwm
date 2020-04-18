@@ -30,8 +30,9 @@ proc addInput*(a:var KeyConfig)=
 proc doKeycodeAction*(key : cuint,mods : cint)=
     for x in keyConfigs:
         if(x.keycode == key and x.modifiers == mods):
-            x.action()
-            return
+            if(x.action != nil):
+                x.action()
+                return
 
 proc getActionConfig*(a : Action): KeyConfig = 
     if(actionToConfigs.contains(a)): result = actionToConfigs[a] else: result = nil

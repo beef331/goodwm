@@ -38,7 +38,7 @@ var
 
 proc selectedScreen : var Screen = screens[selected]
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
-proc activeWindow : PWindow = addr selectedWorkspace().windows[selectedWorkspace().activeWindow]
+proc activeWindow : var TWindow = selectedWorkspace().windows[selectedWorkspace().activeWindow]
 proc `[]=`(w : var Workspace, index : int, win : TWindow) = w.windows[index] = win
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
@@ -105,19 +105,19 @@ proc moveWindowsHorz(right : bool = true)=
     selectedScreen().drawMode()
 
 proc getFocus()=
-    var revert : cint = RevertToNone
-    discard XGetInputFocus(display, activeWindow() ,addr revert)
+    var revert : cint = RevertToParent
+    var workspace = selectedWorkspace()
+    discard XGetInputFocus(display, workspace.windows[workspace.activeWindow].addr ,addr revert)
 
 proc makeFocusedMain()=
     if(selectedWorkspace().wincount() < 1): return
     var workspace = selectedWorkspace()
-    var temp = activeWindow()[]
+    var temp = activeWindow()
     var focused = workspace.activeWindow
     workspace.windows[focused] = workspace.windows[0]
     workspace.windows[0] = temp
     workspace.activeWindow = 0
     getFocus()
-    selectedScreen().drawMode()
 
 proc moveFocusHorz(right : bool = true)=
     var index = selectedWorkspace().activeWindow
@@ -212,6 +212,20 @@ proc frameWindow(w : TWindow)=
     discard XAddToSaveSet(display,w)
     workspace.windows.add(w)
 
+    discard XReparentWindow(display,root,w,0,0)
+    discard XSelectInput(display,w,
+                    SubstructureRedirectMask or
+                    SubstructureNotifyMask or
+                    StructureNotifyMask or
+                    ButtonPressMask or
+                    ButtonReleaseMask or
+                    KeyPressMask or
+                    KeyReleaseMask or 
+                    EnterWindowMask or
+                    LeaveWindowMask or
+                    PropertyChangeMask or
+                    PointerMotionMask)
+
     selectedScreen().drawMode()
     discard XMapWindow(display,w)
 
@@ -219,19 +233,20 @@ proc onMapRequest(e: TXMapRequestEvent) =
     if(not e.window.inCurrentSpace()): frameWindow(e.window)
 
 proc onWindowDestroy(e : TXDestroyWindowEvent)=
-    var workspace = selectedWorkspace()
-    var toDelete = -1
+    for screen in screens:
+        for workspace in screen.workspaces:
+            var toDelete = -1
 
-    if(workspace.wincount >= 1):
-        #Get window to delete
-        for window in 0..<workspace.windows.len:
-            if(workspace.windows[window] == e.window):
-                toDelete = window
-                break
+            if(workspace.wincount() > 0):
+                #Get window to delete
+                for window in 0..<workspace.windows.len:
+                    if(workspace.windows[window] == e.window):
+                        toDelete = window
+                        break
 
-        #Remove window
-        if(toDelete >= 0 ):
-            workspace.windows.delete(toDelete)
+                #Remove window
+                if(toDelete >= 0 ):
+                    workspace.windows.delete(toDelete)
 
     selectedScreen().drawMode()
 
@@ -261,7 +276,6 @@ proc onMouseMoved(e:TXMotionEvent)=
                 discard XGetWindowAttributes(display,window,winAttr.addr)
                 if(e.x >= winAttr.x and e.x <= (winAttr.x + winAttr.width) and e.y >= winAttr.y and e.y <= (winAttr.y + winAttr.height)):
                     selectedWorkspace().activeWindow = index
-                    echo "Try to focus"
                     getFocus()
                     return
                 inc(index)
