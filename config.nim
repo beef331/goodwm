@@ -7,7 +7,7 @@ import x11/xlib
 type
     #These are for WM actions customizabillity
     Action* = enum
-        MoveLeft,MoveRight,CloseWindow,MoveToWorkspace,MoveScreenLeft,MoveScreenRight
+        MoveLeft,MoveRight,CloseWindow,MoveToWorkspace,MoveScreenLeft,MoveScreenRight,FocusRight,FocusLeft,MakeMain
     Layout* = enum
         LeftAlternating,LeftSpiral,Horizontal,Vertical
     KeyConfig* = ref object
@@ -43,18 +43,29 @@ proc getScreenLayout*(screen : int):Layout =
 
 proc loadConfig* (display : PDisplay)=
     var launcherCode = XKeysymToKeycode(display, XStringToKeysym("d")).cuint
-    var launcherCfg = newKeyConfig(launcherCode,ShiftMask,proc()= discard execShellCmd("rofi -show run"))
+    var launcherCfg = newKeyConfig(launcherCode,Mod1Mask,proc()= discard execShellCmd("rofi -show run"))
     addInput(launcherCfg)
 
-    var moveLeft = newKeyConfig(113,ShiftMask,nil)
-    var moveRight = newKeyConfig(114,ShiftMask,nil)
+    var moveLeft = newKeyConfig(113,Mod1Mask,nil)
+    var moveRight = newKeyConfig(114,Mod1Mask,nil)
+    var focusLeft = newKeyConfig(113,ControlMask,nil)
+    var focusRight = newKeyConfig(114,ControlMask,nil)
+    var makeMain = newKeyConfig(58,ControlMask or Mod1Mask,nil)
+    
     addInput(moveLeft)
     addInput(moveRight)
+    addInput(focusLeft)
+    addInput(focusRight)
+    addInput(makeMain)
+
     actionToConfigs.add(MoveLeft,moveLeft)
     actionToConfigs.add(MoveRight,moveRight)
+    actionToConfigs.add(FocusLeft,focusLeft)
+    actionToConfigs.add(FocusRight,focusRight)
+    actionToConfigs.add(MakeMain,makeMain)
 
     screenLayout.add(0,LeftAlternating)
-    screenLayout.add(1,LeftAlternating)
+    screenLayout.add(1,Horizontal)
 
 proc keyConfs* : seq[KeyConfig] = keyConfigs
 
