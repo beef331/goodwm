@@ -152,6 +152,11 @@ proc moveWindowToScreen(right : bool = true)=
     selectedScreen().drawMode()
     getFocus(true)
 
+proc focusScreen(right : bool = false)=
+    let dir = if(right): 1 else : -1
+    selected = (selected + dir + screens.len) %% screens.len
+    discard XWarpPointer(display,None,root,0,0,0,0,selectedScreen().width.div(2) + selectedScreen().xOffset,selectedScreen().height.div(2) + selectedScreen().yOffset)
+
 proc makeFocusedMain()=
     if(selectedWorkspace().wincount() < 1): return
     var workspace = selectedWorkspace()
@@ -264,6 +269,8 @@ proc setup()=
     getActionConfig(MoveScreenRight).action = proc() = moveWindowToScreen(true)
     getActionConfig(MoveScreenLeft).action = proc() = moveWindowToScreen(false)
     getActionConfig(CloseWindow).action = closeWindow
+    getActionConfig(FocusScreenRight).action = proc() = focusScreen(true)
+    getActionConfig(FocusScreenleft).action = proc() = focusScreen(true)
 
 
 

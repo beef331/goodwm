@@ -13,6 +13,8 @@ type
         MoveToWorkspace,
         MoveScreenLeft,
         MoveScreenRight,
+        FocusScreenRight,
+        FocusScreenLeft,
         FocusRight,
         FocusLeft,
         MakeMain
@@ -59,6 +61,8 @@ proc loadConfig* (display : PDisplay)=
     var moveRight = newKeyConfig(114,Mod4Mask or ShiftMask,nil)
     var focusLeft = newKeyConfig(113,Mod4Mask,nil)
     var focusRight = newKeyConfig(114,Mod4Mask,nil)
+    var moveScreenFocusRight = newKeyConfig(113,Mod4Mask or ControlMask or ShiftMask,nil)
+    var moveScreenFocusLeft = newKeyConfig(114,Mod4Mask or ControlMask or ShiftMask,nil)
     var makeMain = newKeyConfig(58,ControlMask or Mod4Mask,nil)
     var moveScreenRight = newKeyConfig(113,Mod4Mask or ControlMask,nil)
     var moveScreenLeft = newKeyConfig(114,Mod4Mask or ControlMask,nil)
@@ -73,6 +77,8 @@ proc loadConfig* (display : PDisplay)=
     addInput(moveScreenRight)
     addInput(moveScreenLeft)
     addInput(closeWindow)
+    addInput(moveScreenFocusLeft)
+    addInput(moveScreenFocusRight)
 
     actionToConfigs.add(MoveLeft,moveLeft)
     actionToConfigs.add(MoveRight,moveRight)
@@ -82,6 +88,8 @@ proc loadConfig* (display : PDisplay)=
     actionToConfigs.add(MoveScreenRight,moveScreenRight)
     actionToConfigs.add(MoveScreenLeft, moveScreenLeft)
     actionToConfigs.add(CloseWindow,closeWindow)
+    actionToConfigs.add(FocusScreenLeft,moveScreenFocusLeft)
+    actionToConfigs.add(FocusScreenRight,moveScreenFocusRight)
 
 
 
