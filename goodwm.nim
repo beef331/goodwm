@@ -35,8 +35,9 @@ var
     screens : seq[Screen]
     selected = 0
 
-proc `selectedScreen`() : var Screen = screens[selected]
+proc `selectedScreen` : var Screen = screens[selected]
 proc selectedWorkspace() : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
+proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
 proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
@@ -44,20 +45,16 @@ proc drawHorizontalTiled()=
     #We dont have any windows, dont draw
     if(workspace.wincount == 0): return
 
-    let flag :cint = CWX or CWY or CWHeight or CWWidth
+    var 
+        selScreen = selectedScreen()
+        x = selScreen.xOffset
+        y = selScreen.yOffset
+        width = cint(selScreen.width.div(workspace.windows.len))
+        height = selScreen.height - 30
 
-    var windowValues = TXWindowChanges()
-    windowValues.x = 0
-    windowValues.y = 0
-    #horz is evenly scaled so we know the width
-    windowValues.width = cint(selectedScreen().width.div(workspace.windows.len))
-    #Add bar height later
-    windowValues.height = selectedScreen().height-30
-    discard XConfigureWindow(display,workspace.mainWindow,flag,addr windowValues)
     for window in workspace.windows:
-        if(window == workspace.mainWindow):continue
-        windowValues.x += windowValues.width
-        discard XConfigureWindow(display,window,flag,addr windowValues)
+        x += width
+        discard XMoveResizeWindow(display,window,x,y,width,height)
 
 proc drawLeftAlternatingSplit()=
     ##Draw Main left with alternating split
@@ -66,30 +63,39 @@ proc drawLeftAlternatingSplit()=
     #We dont have any windows, dont draw
     if(workspace.wincount == 0): return
 
-    let flag :cint = CWX or CWY or CWHeight or CWWidth
+    let selScreen = selectedScreen()
+    const flag : cuint = CWX or CWY or CWWidth or CWHeight
+    
+    var winVals = TXWindowChanges()
 
-    var windowValues = TXWindowChanges()
-    windowValues.x = selectedScreen().xOffset
-    windowValues.y = selectedScreen().yOffset
-    #First window takes up a majority of space
-    windowValues.width = selectedScreen().width
-    #Add bar height later
-    windowValues.height = selectedScreen().height-30
+    var 
+        x = selScreen.xOffset
+        y = selScreen.yOffset
+        width = selScreen.width
+        height = selScreen.height - 30
+    echo $workspace.wincount & " Windows on this screen" 
     var splitVert = true
     for i in 0..<workspace.wincount:
         let window = workspace.windows[i]
-        let hasNext = (i < workspace.wincount - 1)
+        let hasNext = (i + 1 < workspace.wincount)
+        echo fmt"{hasNext} : nextWindow"
         if(splitVert): 
-            if(i > 0): windowValues.y += windowValues.height
-            if(hasNext): windowValues.width = windowValues.width.div(2)
+            if(i > 0): y += height
+            if(hasNext): width = width.div(2)
         else: 
-            if(i > 0): windowValues.x += windowValues.width
-            if(hasNext): windowValues.height = windowValues.height.div(2)
-        discard XConfigureWindow(display,window,flag,addr windowValues)
+            if(i > 0): x += width
+            if(hasNext): height = height.div(2)
+        winVals.x = x
+        winVals.y = y
+        winVals.width = width
+        winVals.height = height
+        echo fmt"{x},{y}:{width}X{height}"
+        discard XConfigureWindow(display,window,flag,winVals.addr)
         splitVert = not splitVert
 
 
 proc moveWindowsHorz(right : bool = true)=
+    echo fmt"Move Window {right}"
     var temp = selectedWorkspace().windows
     var workspace = selectedWorkspace()
     let dir = if(right): -1 else: 1
@@ -128,52 +134,76 @@ proc loadScreens()=
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
 proc setup()=
-    loadScreens()
     display = XOpenDisplay(nil)
+    loadConfig(display)
+    loadScreens()
+    var wa = TXSetWindowAttributes()
+    
 
     if display == nil:
         quit "Failed to open display"
     screen = DefaultScreen(display)
     root = RootWindow(display,screen)
-    
     discard XSetErrorHandler(errorHandler)
-    discard XSelectInput(display,
-                    root,
-                    SubstructureRedirectMask or
+
+    wa.event_mask = SubstructureRedirectMask or
                     SubstructureNotifyMask or
                     ButtonPressMask or
                     ButtonReleaseMask or
                     KeyPressMask or
-                    KeyReleaseMask)
-    discard XSync(display,false)
-    discard XGrabKey(
-      display,
-      XKeysymToKeycode(display, XStringToKeysym("left")),
-      Mod1Mask,
-      root,
-      false,
-      KeyPressMask or KeyReleaseMask,
-      GrabModeAsync)
+                    KeyReleaseMask or 
+                    EnterWindowMask or
+                    LeaveWindowMask or
+                    StructureNotifyMask or
+                    PropertyChangeMask
+    
+    discard XChangeWindowAttributes(display,root,CWEventMask or CWCursor, wa.addr)
 
 
-    #add action procs
-    addAction(MoveRight,proc()=moveWindowsHorz(true))
-    addAction(MoveLeft,proc()=moveWindowsHorz(false))
-
-
-proc onWindowCreation(e: TXCreateWindowEvent) =
-    var workspace = selectedWorkspace()
-    workspace.windows.add(e.window)
-    discard XMapWindow(display,e.window)
-    selectedScreen().drawMode()
     discard XSelectInput(display,
-                e.window,
+                    root,
+                    wa.event_mask)
+
+    discard XSync(display,false)
+    for key in keyConfs():
+        discard XGrabKey(
+        display,
+        key.keycode.cint,
+        key.modifiers,
+        root,
+        true,
+        GrabModeAsync,
+        GrabModeAsync)
+
+    getActionConfig(MoveLeft).action = proc() = moveWindowsHorz(false)
+    getActionConfig(MoveRight).action = proc() = moveWindowsHorz(true)
+
+
+
+
+proc frameWindow(w : TWindow)=
+    var workspace = selectedWorkspace()
+    let selScreen = selectedScreen()
+    discard XAddToSaveSet(display,w)
+    workspace.windows.add(w)
+    discard XSelectInput(display,
+                w,
                 SubstructureRedirectMask or
                 SubstructureNotifyMask or
                 ButtonPressMask or
                 ButtonReleaseMask or
                 KeyPressMask or
                 KeyReleaseMask)
+    selectedScreen().drawMode()
+
+
+
+proc onWindowCreation(e: TXCreateWindowEvent) =
+    if(not e.window.inCurrentSpace() and not e.parent.inCurrentSpace()): frameWindow(e.window)
+
+proc onMap(e : TXMapRequestEvent)=
+    discard XMapWindow(display,e.window)
+    selectedScreen().drawMode()
 
 
 proc onWindowDestroy(e : TXDestroyWindowEvent)=
@@ -189,16 +219,15 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
 
         #Remove window
         if(toDelete >= 0 ):
+            discard XUnmapWindow(display,workspace.windows[toDelete])
             workspace.windows.delete(toDelete)
-            workspace.windows.setLen(workspace.wincount()-1)
 
     selectedScreen().drawMode()
 
 proc onKeyPress(e : TXKeyEvent)=
-    var workspace = selectedWorkspace()
     var strName = XKeycodeToKeysym(display,TKeyCode(e.keycode),0).XKeysymToString()
     echo fmt"{e.keycode} is {strName}"
-    doKeycodeAction(e.keycode)
+    doKeycodeAction(e.keycode.cint,e.state.cint)
 
 proc onKeyRelease(e : TXKeyEvent)=
     case(e.keyCode):
@@ -210,13 +239,18 @@ proc onButtonPressed(e:TXButtonEvent)=
 proc onButtonReleased(e:TXButtonEvent)=
     echo e.button
 
+proc onConfigureRequest(e : TXConfigureRequestEvent)=
+    discard XMoveResizeWindow(display,e.window,e.x,e.y,e.width,e.height)
+
 proc run()=
     setup()
-
+    runScript()
     while running:
         var ev : TXEvent = TXEvent() 
         discard XNextEvent(display,ev.addr)
         case (ev.theType):
+        of MapRequest:
+            onMap(ev.xmaprequest)
         of CreateNotify:
             onWindowCreation(ev.xcreatewindow)
         of DestroyNotify:
