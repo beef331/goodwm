@@ -57,8 +57,11 @@ proc getScreenLayout*(screen : int):Layout =
 proc loadConfig* (display : PDisplay)=
     var launcherCode = XKeysymToKeycode(display, XStringToKeysym("d")).cuint
     var launcherCfg = newKeyConfig(launcherCode,Mod4Mask,proc()= discard execShellCmd("rofi -show run"))
+    var flameshotCode = XKeysymToKeycode(display, XStringToKeysym("3")).cuint
+    var flameshotCfg = newKeyConfig(flameshotCode,ControlMask or ShiftMask,proc() = discard execShellCmd("flameshot gui"))
+    
     addInput(launcherCfg)
-
+    addInput(flameshotCfg)
     var moveLeft = newKeyConfig(113,Mod4Mask or ShiftMask,nil)
     var moveRight = newKeyConfig(114,Mod4Mask or ShiftMask,nil)
     var focusLeft = newKeyConfig(113,Mod4Mask,nil)

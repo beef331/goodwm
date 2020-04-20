@@ -7,6 +7,7 @@ import nre
 import statusbar
 import widgets/workspacelist
 import widgets/timewidget
+import os
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -33,9 +34,6 @@ proc wincount(a : Workspace): int = a.windows.len
 var
     display:PDisplay
     root:TWindow
-    attr:TXWindowAttributes
-    start:TXButtonEvent
-    mask : clong
     running: bool = true
     screen : cint
     screens : seq[Screen]
@@ -60,6 +58,8 @@ proc selectedScreen : var Screen = screens[selected]
 
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
 
+proc activeWorkspaceEmpty():bool= selectedWorkspace().wincount() == 0
+
 proc activeWindow : var TWindow = selectedWorkspace().windows[selectedWorkspace().activeWindow]
 
 proc `[]=`(w : var Workspace, index : int, win : TWindow) = w.windows[index] = win
@@ -75,12 +75,11 @@ proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
 
 proc getFocus(moveCursor : bool = false)=
-    if(activeWindow() != root):
-        if(moveCursor):
-            var winAttr = TXWindowAttributes()
-            discard XGetWindowAttributes(display,activeWindow(),winAttr.addr)
-            discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
-        discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
+    if(moveCursor):
+        var winAttr : PXWindowAttributes
+        discard XGetWindowAttributes(display,activeWindow(),winAttr)
+        discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
 
 proc drawBar(scr : Screen)=
     let barX : cint = scr.xOffset
@@ -175,18 +174,20 @@ proc moveWindowsHorz(right : bool = true)=
     getFocus(true)
 
 proc moveWindowToScreen(right : bool = true)=
-    if(selectedWorkspace().wincount() == 0): return
+    if(activeWorkspaceEmpty()): return
+
     let activeWindow = activeWindow()
     let dir = if(right): 1 else : -1
     let index = selectedWorkspace().activeWindow
     selectedWorkspace().windows.delete(index)
-    selectedWorkspace().activeWindow = (selectedWorkspace().wincount + index - 1) %% selectedWorkspace().wincount
+    selectedWorkspace().activeWindow = 0
     
     selectedScreen().drawMode()
 
     selected = (selected + dir + screens.len) %% screens.len
     selectedWorkspace().windows.add(activeWindow)
     selectedWorkspace().activeWindow = selectedWorkspace().windows.high
+    
     selectedScreen().drawMode()
     getFocus(true)
 
@@ -230,7 +231,7 @@ proc goToWorkspace(index : int)=
         getFocus()
 
 proc closeWindow()=
-    if(activeWindow() == root): return
+    if(activeWorkspaceEmpty()): return
     var ev = TXEvent()
     ev.xclient.theType = ClientMessage
     ev.xclient.window = activeWindow()
@@ -333,6 +334,7 @@ proc setup()=
             let keyConf = newKeyConfig(keycode.cuint,Mod4Mask,proc() = goToWorkspace(i-1))
             addInput(keyConf)
         screen.drawBar()
+        discard XReparentWindow(display,root,screen.barWin,0,0)
 
     getActionConfig(MoveLeft).action = proc() = moveWindowsHorz(false)
     getActionConfig(MoveRight).action = proc() = moveWindowsHorz(true)
@@ -343,8 +345,7 @@ proc setup()=
     getActionConfig(MoveScreenLeft).action = proc() = moveWindowToScreen(false)
     getActionConfig(CloseWindow).action = closeWindow
     getActionConfig(FocusScreenRight).action = proc() = focusScreen(true)
-    getActionConfig(FocusScreenleft).action = proc() = focusScreen(true)
-
+    getActionConfig(FocusScreenleft).action = proc() = focusScreen(false)
 
 proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
@@ -353,6 +354,7 @@ proc frameWindow(w : TWindow)=
 
     discard XReparentWindow(display,root,w,0,0)
     discard XMapWindow(display,w)
+    discard XSelectInput(display,w,eventMask)
     selectedScreen().drawMode()
 
 proc onMapRequest(e: var TXMapRequestEvent) =
@@ -395,29 +397,27 @@ proc onButtonPressed(e:TXButtonEvent)=
 proc onButtonReleased(e:TXButtonEvent)=
     echo e.button
 
-proc onEnterWindow(e : TXCrossingEvent)=
+proc onEnterEvent(e : TXCrossingEvent)=
     for x in 0..<screens.len:
-        var screen = screens[x]
-
-        var workspace = screen.workspaces[screen.activeWorkspace]
-        for i in 0..<workspace.wincount:
-            if(workspace[i] == e.window):
+        let screen = screens[x]
+        for y in screen.workspaces[screen.activeWorkspace].windows:
+            if(e.window == screen.workspaces[screen.activeWorkspace].windows[screen.activeWorkspace]):
                 selected = x
-                workspace.activeWindow = i
+                screen.workspaces[screen.activeWorkspace].activeWindow = y
                 getFocus()
                 return
-        if(e.x >= screen.xOffset and e.y >= screen.yOffset and e.x <= (screen.width + screen.xOffset) and e.y <= (screen.width + screen.yOffset)):
-            selected = x
-            return
 
 
 proc run()=
     setup()
     runScript()
     while running:
-        var ev : TXEvent = TXEvent() 
-        barLoop()
+        var ev : TXEvent = TXEvent()
+        var barLoopThisFrame = false
         while(XCheckMaskEvent(display,eventMask,ev.addr)):
+            if(not barLoopThisFrame): 
+                barLoop()
+                barLoopThisFrame = true
             case (ev.theType):
             of DestroyNotify:
                 onWindowDestroy(ev.xdestroywindow)
@@ -432,8 +432,8 @@ proc run()=
             of ButtonRelease:
                 onButtonReleased(ev.xbutton)
             of EnterNotify:
-                onEnterWindow(ev.xcrossing)
+                onEnterEvent(ev.xcrossing)
             else: discard
-
+        sleep(1)
 run()
 
