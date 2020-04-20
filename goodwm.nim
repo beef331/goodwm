@@ -5,9 +5,12 @@ import config
 import osproc
 import nre
 import statusbar
+import widgetEvents
 import widgets/workspacelist
 import widgets/timewidget
+import widgets/launcher
 import os
+import times
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -19,11 +22,11 @@ converter toBool(x: TBool): bool = x.bool
 type 
     Workspace = ref object of RootObj
         windows : seq[TWindow]
-        activeWindow : Natural
+        activeWindow : int
     Screen = ref object of RootObj
         width,height,xOffset,yOffset : cint
         drawMode : proc()
-        activeWorkspace : Natural
+        activeWorkspace : int
         workspaces : seq[Workspace]
         barWin : TWindow
         bar : Bar
@@ -73,13 +76,15 @@ proc notBar(w :TWindow):bool=
 
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
-
 proc getFocus(moveCursor : bool = false)=
-    if(moveCursor):
+    if(selectedWorkspace().wincount == 0): return
+    if(not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount):
+        selectedWorkspace().activeWindow = 0
+    if(moveCursor and false):
         var winAttr : PXWindowAttributes
-        discard XGetWindowAttributes(display,activeWindow(),winAttr)
-        discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
-    discard XSetInputFocus(display,activeWindow(),RevertToParent,CurrentTime)
+        let status = XGetWindowAttributes(display,activeWindow(),winAttr)
+        if(status != 0 ): discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+    discard XSetInputFocus(display,activeWindow(),RevertToPointerRoot,CurrentTime)
 
 proc drawBar(scr : Screen)=
     let barX : cint = scr.xOffset
@@ -160,9 +165,8 @@ proc drawLeftAlternatingSplit()=
     selScreen.drawBar()
 
 proc moveWindowsHorz(right : bool = true)=
-    if(selectedWorkspace().wincount() == 0): return
+    if(selectedWorkspace().wincount() <= 1): return
     var workspace = selectedWorkspace()
-    if(workspace.wincount <= 1): return
     let sourceIndex = workspace.activeWindow
     let activeWindow = workspace.windows[workspace.activeWindow]
     let dir = if(right): 1 else: -1
@@ -280,11 +284,15 @@ proc loadScreens()=
         if(barPointer[1] != nil):
             screen.bar = barPointer[0]
             screen.barWin = cast[TWindow](barPointer[1])
-        screen.bar.addWidget(newWorkspaceList())
-        screen.bar.addWidget(newTimeWidget())
+            screen.bar.addWidget(newWorkspaceList())
+            screen.bar.addWidget(newTimeWidget())
+            screen.bar.addWidget(newLauncher())
         inc(screenIndex)
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
+
+proc addWidgetFunctions()=
+    widgetEvents.goToWorkspace = goToWorkspace
 
 proc setup()=
     display = XOpenDisplay(nil)
@@ -293,6 +301,8 @@ proc setup()=
     var wa = TXSetWindowAttributes()
     let netActiveAtom = XInternAtom(display,"_NET_ACTIVE_WINDOW",false)
     if(display == nil): quit "Failed to open display"
+
+    addWidgetFunctions()
 
     screen = DefaultScreen(display)
     root = RootWindow(display,screen)
@@ -334,7 +344,15 @@ proc setup()=
             let keyConf = newKeyConfig(keycode.cuint,Mod4Mask,proc() = goToWorkspace(i-1))
             addInput(keyConf)
         screen.drawBar()
-        discard XReparentWindow(display,root,screen.barWin,0,0)
+        discard XSelectInput(display,screen.barWin,
+                                                    PointerMotionMask or 
+                                                    EnterWindowMask or
+                                                    LeaveWindowMask or 
+                                                    Button1Mask or
+                                                    Button1MotionMask or
+                                                    Button2Mask or
+                                                    Button2MotionMask)
+
 
     getActionConfig(MoveLeft).action = proc() = moveWindowsHorz(false)
     getActionConfig(MoveRight).action = proc() = moveWindowsHorz(true)
@@ -351,10 +369,9 @@ proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
     discard XAddToSaveSet(display,w)
     workspace.windows.add(w)
-
+    discard XSelectInput(display,w,PointerMotionMask or EnterWindowMask or LeaveWindowMask)
     discard XReparentWindow(display,root,w,0,0)
     discard XMapWindow(display,w)
-    discard XSelectInput(display,w,eventMask)
     selectedScreen().drawMode()
 
 proc onMapRequest(e: var TXMapRequestEvent) =
@@ -378,6 +395,7 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
                 if(toDelete >= 0 ):
                     workspace.windows.delete(toDelete)
                     toDelete = -1
+    selectedWorkspace().activeWindow = 0
     if(selectedWorkspace().wincount() > 0):
         getFocus()
     selectedScreen().drawMode()
@@ -392,32 +410,36 @@ proc onKeyRelease(e : TXKeyEvent)=
     else: discard
 
 proc onButtonPressed(e:TXButtonEvent)=
-    echo e.button
+    discard
 
 proc onButtonReleased(e:TXButtonEvent)=
-    echo e.button
+    discard
 
 proc onEnterEvent(e : TXCrossingEvent)=
     for x in 0..<screens.len:
         let screen = screens[x]
-        for y in screen.workspaces[screen.activeWorkspace].windows:
-            if(e.window == screen.workspaces[screen.activeWorkspace].windows[screen.activeWorkspace]):
+        let workspace = screen.workspaces[screen.activeWorkspace]
+        for y in 0..<workspace.wincount():
+            let win = workspace.windows[y]
+            if(e.window == win):
                 selected = x
                 screen.workspaces[screen.activeWorkspace].activeWindow = y
                 getFocus()
                 return
 
-
 proc run()=
     setup()
     runScript()
+    var ev : TXEvent = TXEvent()
+    var lastDraw = epochTime()
+    var delay = 0.1
     while running:
-        var ev : TXEvent = TXEvent()
-        var barLoopThisFrame = false
+        var barDrawn = false
         while(XCheckMaskEvent(display,eventMask,ev.addr)):
-            if(not barLoopThisFrame): 
+            if(not barDrawn and epochTime() - lastDraw >= delay):
                 barLoop()
-                barLoopThisFrame = true
+                barDrawn = true
+                lastDraw = epochTime()
             case (ev.theType):
             of DestroyNotify:
                 onWindowDestroy(ev.xdestroywindow)
@@ -434,6 +456,6 @@ proc run()=
             of EnterNotify:
                 onEnterEvent(ev.xcrossing)
             else: discard
-        sleep(1)
+        sleep(10)
 run()
 

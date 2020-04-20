@@ -8,14 +8,14 @@ type
     TimeWidget = ref object of Widget
 
 var 
-    lastT : float
+    lastT : float = 0
     delay : float = 1
     time : string
 
 proc draw(fontSize,bwidth,bheight:float32)=
     igSameLine(0,0)
-    if(cpuTime()-lastT >= delay):
-        lastT = cpuTime()
+    if(epochTime()-lastT >= delay):
+        lastT = epochTime()
         time = execProcess("date +'%a %b %d,%l:%M%P%t'")
     let offset = igCalcTextSize(time).x
     igSetCursorPosX(bwidth - offset)
