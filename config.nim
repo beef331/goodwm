@@ -31,10 +31,10 @@ var
     keyConfigs : seq[KeyConfig]
     screenLayout = initTable[int,Layout]()
 
-proc newKeyConfig(keycode : cuint,mods:cint,action : proc()): KeyConfig=
+proc newKeyConfig*(keycode : cuint,mods:cint,action : proc()): KeyConfig=
     return KeyConfig(keycode:keycode,modifiers:mods,action:action)
 
-proc addInput*(a:var KeyConfig)=
+proc addInput*(a: KeyConfig)=
     keyConfigs.add(a)
 
 proc doKeycodeAction*(key : cuint,mods : cint)=
@@ -100,5 +100,5 @@ proc keyConfs* : seq[KeyConfig] = keyConfigs
 
 
 proc runScript*()=
-    discard execShellCmd("nim ./init.nims")
+    discard execShellCmd("nim ~/goodwm/init.nims")
 
