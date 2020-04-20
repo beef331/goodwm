@@ -31,6 +31,8 @@ var
     keyConfigs : seq[KeyConfig]
     screenLayout = initTable[int,Layout]()
 
+const workspaceSymbols* = @["1","2","3","4","5","6","7","8","9"]
+
 proc newKeyConfig*(keycode : cuint,mods:cint,action : proc()): KeyConfig=
     return KeyConfig(keycode:keycode,modifiers:mods,action:action)
 

@@ -5,6 +5,8 @@ import config
 import osproc
 import nre
 import statusbar
+import widgets/workspacelist
+import widgets/timewidget
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -22,7 +24,8 @@ type
         drawMode : proc()
         activeWorkspace : Natural
         workspaces : seq[Workspace]
-        bar : TWindow
+        barWin : TWindow
+        bar : Bar
 
 proc mainWindow(a : Workspace):TWindow = a.windows[0]
 proc wincount(a : Workspace): int = a.windows.len
@@ -54,10 +57,19 @@ let eventMask = SubstructureRedirectMask or
                 LeaveWindowMask
 
 proc selectedScreen : var Screen = screens[selected]
+
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
+
 proc activeWindow : var TWindow = selectedWorkspace().windows[selectedWorkspace().activeWindow]
+
 proc `[]=`(w : var Workspace, index : int, win : TWindow) = w.windows[index] = win
+
 proc `[]`(w : var Workspace, index : int) : TWindow = w.windows[index]
+
+proc notBar(w :TWindow):bool=
+    for screen in screens:
+        if(w == screen.barWin): return false
+    return true
 
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
@@ -73,8 +85,7 @@ proc getFocus(moveCursor : bool = false)=
 proc drawBar(scr : Screen)=
     let barX : cint = scr.xOffset
     let barY : cint = scr.yOffset + scr.height - statusBarHeight
-    discard XMoveResizeWindow(display,scr.bar,barX,barY,scr.width.cint,statusBarHeight)
-
+    discard XMoveResizeWindow(display,scr.barWin,barX,barY,scr.width.cint,statusBarHeight)
 
 proc drawHorizontalTiled()=
     ##Make windows horizontally tiled
@@ -93,7 +104,6 @@ proc drawHorizontalTiled()=
         x += width
         discard XMoveResizeWindow(display,window,x,y,width,height)
     selScreen.drawBar()
-
 
 proc drawVerticalTiled()=
     ##Make windows horizontally tiled
@@ -170,7 +180,8 @@ proc moveWindowToScreen(right : bool = true)=
     let dir = if(right): 1 else : -1
     let index = selectedWorkspace().activeWindow
     selectedWorkspace().windows.delete(index)
-    selectedWorkspace().activeWindow = index - 1
+    selectedWorkspace().activeWindow = (selectedWorkspace().wincount + index - 1) %% selectedWorkspace().wincount
+    
     selectedScreen().drawMode()
 
     selected = (selected + dir + screens.len) %% screens.len
@@ -238,17 +249,22 @@ proc loadScreens()=
     let offsetReg = re"\+[\d]+"
     let xrandrResponse = execCmdEx("xrandr --listactivemonitors").output.findAll(monitorReg)
     var screenIndex = 0
-    let symbols = @["1","2","3","4","5","6","7","8","9"]
+
     for line in xrandrResponse:
         var screen = Screen()
         let size = line.findAll(sizeReg)
         let offset = line.findAll(offsetReg)
+
         if(size.len != 2 or offset.len != 2): quit "Cant find monitors"
+        
+        #Get monitor info
         screen.width = parseInt(size[0].replace("/")).cint
         screen.height = parseInt(size[1].replace("/")).cint
         screen.xOffset = parseInt(offset[0].replace("+")).cint
         screen.yOffset = parseInt(offset[1].replace("+")).cint
         screen.workspaces.add(Workspace())
+
+        #Assign layout
         case(getScreenLayout(screenIndex)):
         of Horizontal:
             screen.drawMode = drawHorizontalTiled
@@ -257,7 +273,14 @@ proc loadScreens()=
         of Vertical:
             screen.drawMode = drawVerticalTiled
         else: screen.drawMode = drawHorizontalTiled
-        screen.bar = cast[TWindow](spawnStatusBar(screen.width,statusBarHeight,symbols))
+
+        #Make status bar
+        var barPointer = spawnStatusBar(screen.width,statusBarHeight)
+        if(barPointer[1] != nil):
+            screen.bar = barPointer[0]
+            screen.barWin = cast[TWindow](barPointer[1])
+        screen.bar.addWidget(newWorkspaceList())
+        screen.bar.addWidget(newTimeWidget())
         inc(screenIndex)
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
@@ -354,7 +377,7 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
                     workspace.windows.delete(toDelete)
                     toDelete = -1
     if(selectedWorkspace().wincount() > 0):
-        getFocus(true)
+        getFocus()
     selectedScreen().drawMode()
 
 proc onKeyPress(e : TXKeyEvent)=

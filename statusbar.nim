@@ -4,21 +4,23 @@ import nimgl/imgui
 import nimgl/glfw/native
 import x11/xlib,x11/x
 import times
+import widget
 
 type
     Bar* = ref object of Rootobj
         window : GLFWWindow
         width : float32
         height : float32
-        workspaceSym : seq[string]
-        activeWorkspace : int
+        widgets : seq[Widget]
 
 proc newCol(x,y,z:float): ImVec4 = ImVec4(x:x,y:y,z:z,w:1)
 
+
+proc addWidget*(bar : var Bar,widget:Widget)= bar.widgets.add(widget)
+
+
 var 
     bars : seq[Bar] 
-    activeWorkspaceCol = newCol(0,0.3,0.9)
-    inactiveWorkspaceCol = newCol(0,0.3,0.5)
     fontsize : float32 = 24
     taskSpacing : float32 = 5
 
@@ -29,15 +31,25 @@ const windowFlags =  ImGuiWindowFlags(
 
 let themed = false
 
+
+
 proc barLoop*()=
+    glfwPollEvents()
     for bar in bars:
         bar.window.makeContextCurrent()
+
+        discard setMouseButtonCallback(bar.window,nil)
+        discard setKeyCallback(bar.window,nil)
+        discard setCharCallback(bar.window,nil)
+        discard setScrollCallback(bar.window,nil)
+
         assert glInit()
-        let context = igCreateContext()
+        var context = igCreateContext()
         assert igGlfwInitForOpenGL(bar.window, true)
         if(not themed):
             var style = igGetStyle()
-            style.windowRounding = 0f  
+            style.windowPadding = ImVec2(x:0f,y:0f)
+            style.windowRounding = 0f
 
 
         glClearColor(1,1,1,0)
@@ -48,35 +60,28 @@ proc barLoop*()=
         igSetNextWindowSize(ImVec2(x:bar.width,y:bar.height),ImGuiCond.Always)
         igSetNextWindowPos(ImVec2(x:0,y:0),ImGuiCond.Always)
         igBegin("Goodwm Status Bar",flags = windowFlags)
-        for x in 0..<bar.workspaceSym.len:
-            igSetCursorPosY(0)
-            if(igButton(bar.workspaceSym[x],ImVec2(x:fontsize,y:bar.height))):
-                echo bar.workspaceSym[x]
-            igSameLine(0,taskSpacing - fontsize)
 
-            #[
-            if(x == bar.activeWorkspace):
-                igTextColored(activeWorkspaceCol,bar.workspaceSym[x])
-            else: igTextColored(inactiveWorkspaceCol,bar.workspaceSym[x])
-            igSameLine(0,taskSpacing)
-            ]#
-
+        for x in bar.widgets:
+            x.draw(fontsize,bar.width,bar.height)
 
         igEnd()
         igRender()
         igOpenGL3RenderDrawData(igGetDrawData())
         bar.window.swapbuffers()
+        igOpenGL3Shutdown()
+        igGlfwShutdown()
 
 
 
-proc spawnStatusBar*(width,height:int32, workspaceSym : seq[string]) : pointer=
+proc spawnStatusBar*(width,height:int32) : (Bar,pointer)=
+    ##Bar in A pointer in B
     let w : GLFWWindow = glfwCreateWindow(width, height, "Goodwm status bar")
-    if(w == nil): return nil
+    if(w == nil): return (nil,nil)
+
     var bar = Bar(window:w,
-                width:float32(width),
-                height:float32(height),
-                workspaceSym:workspaceSym)
-    result = getX11Window(w)
+                width : float32(width),
+                height : float32(height))
+    result = (bar,getX11Window(w))
     bars.add(bar)
 
 
@@ -88,9 +93,6 @@ proc init() =
     glfwWindowHint(GLFWOpenglForwardCompat, GLFW_TRUE) # Used for Mac
     glfwWindowHint(GLFWOpenglProfile, GLFW_OPENGL_CORE_PROFILE)
     glfwWindowHint(GLFWResizable, GLFW_FALSE)
-
-    
-
 
 
 init()
