@@ -12,7 +12,7 @@ proc draw(fontSize,bwidth,bheight:float32)=
     igSameLine(0,0)
     var size = igCalcTextSize("Launcher")
     igSetCursorPosX(bwidth/2 - size.x/2)
-    igSetCursorPosY(bheight/2 - size.y/2)
+    igSetCursorPosY(0)
     if(igButton("Launcher")): discard execShellCmd("rofi -show run")
     igSameLine(0,0)
 

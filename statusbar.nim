@@ -29,11 +29,11 @@ const windowFlags =  ImGuiWindowFlags(
 
 proc barLoop*()=
     glfwPollEvents()
-
     for bar in bars:
         igOpenGL3NewFrame()
         igGlfwNewFrame()
         igNewFrame()
+
         igSetNextWindowSize(ImVec2(x:bar.width,y:bar.height),ImGuiCond.Always)
         igSetNextWindowPos(ImVec2(x:0,y:0),ImGuiCond.Always)
         igBegin("Goodwm Status Bar",flags = windowFlags)
@@ -54,30 +54,33 @@ proc barLoop*()=
 
 proc spawnStatusBar*(width,height:int32) : (Bar,pointer)=
     ##Bar in A pointer in B
+
     var window : GLFWWindow
-    if(bars.len > 0):
-        let w : GLFWWindow = glfwCreateWindow(width, height, "Goodwm status bar",share = bars[0].window)
-        if(w == nil): return (nil,nil)
-        window = w
-    else:
-        let w : GLFWWindow = glfwCreateWindow(width, height, "Goodwm status bar")
-        if(w == nil): return (nil,nil)
-        window = w
+
+    if(bars.len == 0):
+        window = glfwCreateWindow(width, height, "Goodwm status bar")
+        if(window == nil): return (nil,nil)
+        
         window.makeContextCurrent()
-        igCreateContext()
-    assert igGlfwInitForOpenGL(window, true)
+        assert igOpenGL3Init()
+        assert glInit()
+
+        var style = igGetStyle()
+        style.windowPadding = ImVec2(x:0f,y:0f)
+        style.windowRounding = 0
+
+        assert igGlfwInitForOpenGL(window, true)
+
+    else:
+        window  = glfwCreateWindow(width, height, "Goodwm status bar",share = bars[0].window)
 
     var bar = Bar(window:window,
                 width : float32(width),
                 height : float32(height))
-    assert glInit()
-
-    var style = igGetStyle()
-    style.windowPadding = ImVec2(x:0f,y:0f)
-    style.windowRounding = 0
 
     result = (bar,getX11Window(window))
     bars.add(bar)
+    
 
 
 proc init() =
@@ -88,6 +91,7 @@ proc init() =
     glfwWindowHint(GLFWOpenglForwardCompat, GLFW_TRUE) # Used for Mac
     glfwWindowHint(GLFWOpenglProfile, GLFW_OPENGL_CORE_PROFILE)
     glfwWindowHint(GLFWResizable, GLFW_FALSE)
+    igCreateContext()
 
 init()
 
