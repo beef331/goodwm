@@ -2,10 +2,12 @@ import tables
 import os
 import osproc
 import x11/x
+import x11/keysym
 import x11/xlib
 import json
 import strutils
 import tables
+import strformat
 
 type
     #These are for WM actions customizabillity
@@ -21,6 +23,7 @@ type
         FocusRight,
         FocusLeft,
         MakeMain,
+        ReloadConfig
         NoAction
     Layout* = enum
         LeftAlternating,LeftSpiral,Horizontal,Vertical
@@ -36,12 +39,14 @@ var
     keyConfigs : seq[KeyConfig]
     screenLayout = initTable[int,Layout]()
     borderSize* : cint = 3
+    
 
 const workspaceSymbols* = @["1","2","3","4","5","6","7","8","9"]
-const configPath = "/home/jason/goodwm/goodwm.cfg"
+const configPath = "/home/jason/goodwm/goodwm.json"
 
 const modStringToModVal = {"Shift": ShiftMask,"Control" : ControlMask, "Alt" : Mod1Mask, "Super" : Mod4Mask, "Caps" : LockMask}.toTable
-
+const keyToXKeys = {"left" : XK_Left, "right": XK_Right, "up" : XK_Up, "down" : XK_down}.toTable
+ 
 proc newKeyConfig*(keycode : cuint,mods:cint,action : proc()): KeyConfig=
     return KeyConfig(keycode:keycode,modifiers:mods,action:action)
 
@@ -59,7 +64,8 @@ proc newKeyConfig(node : JsonNode,display : PDisplay): (Action,KeyConfig)=
             let keys = node["key"].getStr().split("+")
             for x in keys:
                 if(modStringToModVal.contains(x)): config.modifiers = config.modifiers or modStringToModVal[x].cint
-                else : config.keycode = XKeysymToKeycode(display, XStringToKeysym(x.toLower())).cuint
+                elif(keyToXKeys.contains(x.toLower())) : config.keycode = XKeysymToKeycode(display,keyToXKeys[x.toLower()]).cuint
+                else :  config.keycode = XKeysymToKeycode(display,XStringToKeysym(x.toLower())).cuint
             if(node.contains("desc")): config.desc = node["desc"].getStr()
             result[1] = config
 
@@ -83,16 +89,32 @@ proc getScreenLayout*(screen : int):Layout =
 
 
 proc loadConfig* (display : PDisplay)=
+    screenLayout.clear()
+    keyConfigs.setLen(0)
+    actionToConfigs.clear()
 
-    let cfgJson = parseJson(open(configPath,fmread).readAll())
+    let file = open(configPath,fmread)
+    let cfgJson = parseJson(file.readAll())
+    file.close()
 
     for x in cfgJson["keyconfigs"]:
         let actionKeyConf = newKeyConfig(x,display)
         if(actionKeyConf[0] != NoAction):actionToConfigs.add(actionKeyConf[0],actionKeyConf[1])
         addInput(actionKeyConf[1])
+    
+    var index = 0
+    for x in cfgJson["screenlayout"]:
+        try:
+            let layout = parseEnum[Layout](x.getStr())
+            screenLayout.add(index,layout)
+            inc(index)
+        except:
+            echo fmt"{x.getStr()} offers an incorrect layout, refer to docs."
+    echo screenLayout
+    let theme = cfgJson["theme"]
+    if(theme["border-size"] != nil):
+        borderSize = theme["border-size"].getInt().cint
 
-    screenLayout.add(0,LeftAlternating)
-    screenLayout.add(1,Vertical)
 
 proc keyConfs* : seq[KeyConfig] = keyConfigs
 

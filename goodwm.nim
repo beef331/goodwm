@@ -56,7 +56,6 @@ let eventMask = SubstructureRedirectMask or
                 KeyReleaseMask or 
                 EnterWindowMask or
                 LeaveWindowMask or
-                PropertyChangeMask or
                 PointerMotionMask or
                 EnterWindowMask or
                 LeaveWindowMask
@@ -275,7 +274,6 @@ proc loadScreens()=
     let sizeReg = re"\d*\/"
     let offsetReg = re"\+[\d]+"
     let xrandrResponse = execCmdEx("xrandr --listactivemonitors").output.findAll(monitorReg)
-    var screenIndex = 0
 
     for line in xrandrResponse:
         var screen = Screen()
@@ -289,17 +287,8 @@ proc loadScreens()=
         screen.height = parseInt(size[1].replace("/")).cint
         screen.xOffset = parseInt(offset[0].replace("+")).cint
         screen.yOffset = parseInt(offset[1].replace("+")).cint
-        screen.workspaces.add(Workspace())
 
-        #Assign layout
-        case(getScreenLayout(screenIndex)):
-        of Horizontal:
-            screen.drawMode = drawHorizontalTiled
-        of LeftAlternating:
-            screen.drawMode = drawLeftAlternatingSplit
-        of Vertical:
-            screen.drawMode = drawVerticalTiled
-        else: screen.drawMode = drawHorizontalTiled
+        for x in 0..9: screen.workspaces.add(Workspace())
 
         #Make status bar
         var barPointer = spawnStatusBar(screen.width,statusBarHeight)
@@ -310,37 +299,15 @@ proc loadScreens()=
             screen.bar.addWidget(newLauncher())
             screen.bar.addWidget(newVolumeSlider())
             screen.bar.addWidget(newTimeWidget())
-        inc(screenIndex)
+            discard XSelectInput(display,screen.barWin, PointerMotionMask or 
+                                                        EnterWindowMask or
+                                                        LeaveWindowMask or 
+                                                        ButtonMotionMask)
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
-proc addWidgetFunctions()=
-    widgetEvents.goToWorkspace = goToWorkspace
-
-proc setup()=
-    display = XOpenDisplay(nil)
+proc initFromConfig()=
     loadConfig(display)
-    loadScreens()
-    var wa = TXSetWindowAttributes()
-    let netActiveAtom = XInternAtom(display,"_NET_ACTIVE_WINDOW",false)
-    if(display == nil): quit "Failed to open display"
-
-    addWidgetFunctions()
-
-    screen = DefaultScreen(display)
-    root = RootWindow(display,screen)
-    discard XSetErrorHandler(errorHandler)
-
-    wa.event_mask = eventMask
-    
-    discard XChangeWindowAttributes(display,root,CWEventMask or CWCursor, wa.addr)
-
-
-    discard XSelectInput(display,
-                    root,
-                    wa.event_mask)
-
-    discard XSync(display,false)
     for key in keyConfs():
         discard XGrabKey(
                 display,
@@ -351,27 +318,37 @@ proc setup()=
                 GrabModeAsync,
                 GrabModeAsync)
 
+    var screenIndex = 0
+
+    for i in 0..9:
+        let actualNum = (i - 1 + 10) %% 10
+        let keycode = XKeysymToKeycode(display,XStringToKeysym($actualNum))
+        discard XGrabKey(
+                display,
+                keycode,
+                Mod4Mask,
+                root,
+                true,
+                GrabModeAsync,
+                GrabModeAsync)
+        let keyConf = newKeyConfig(keycode.cuint,Mod4Mask,proc() = goToWorkspace(actualNum))
+        addInput(keyConf)
+
     for screen in screens:
-        screen.workspaces.setLen(9)
-        for i in 0..8:
-            screen.workspaces[i] = Workspace()
-            let keycode = XKeysymToKeycode(display,XStringToKeysym($(i + 1)))
-            discard XGrabKey(
-                    display,
-                    keycode,
-                    Mod4Mask,
-                    root,
-                    true,
-                    GrabModeAsync,
-                    GrabModeAsync)
-            let keyConf = newKeyConfig(keycode.cuint,Mod4Mask,proc() = goToWorkspace(i))
-            addInput(keyConf)
+        #Assign layout
+        echo getScreenLayout(screenIndex)
+        case(getScreenLayout(screenIndex)):
+        of Horizontal:
+            screen.drawMode = drawHorizontalTiled
+        of LeftAlternating:
+            screen.drawMode = drawLeftAlternatingSplit
+        of Vertical:
+            screen.drawMode = drawVerticalTiled
+        else: screen.drawMode = drawHorizontalTiled
+        inc(screenIndex)
+        screen.drawmode()
         screen.drawBar()
-        discard XSelectInput(display,screen.barWin,
-                                                    PointerMotionMask or 
-                                                    EnterWindowMask or
-                                                    LeaveWindowMask or 
-                                                    ButtonMotionMask)
+
 
 
     addActionToConfig(MoveLeft, proc() = moveWindowsHorz(false))
@@ -384,6 +361,42 @@ proc setup()=
     addActionToConfig(CloseWindow, closeWindow)
     addActionToConfig(FocusScreenRight, proc() = focusScreen(true))
     addActionToConfig(FocusScreenleft, proc() = focusScreen(false))
+    addActionToConfig(ReloadConfig,widgetEvents.invokeReloadConfig)
+
+
+    var wa = TXSetWindowAttributes()
+    wa.event_mask = eventMask
+    
+    discard XChangeWindowAttributes(display,root,CWEventMask or CWCursor, wa.addr)
+
+proc reloadConfig()=
+    discard XUngrabKey(display,AnyKey,AnyModifier,root)
+    initFromConfig()
+    for screen in screens:
+        screen.drawMode()
+
+proc addWidgetFunctions()=
+    widgetEvents.goToWorkspace = goToWorkspace
+    widgetEvents.reloadConfig = reloadConfig
+
+proc setup()=
+    display = XOpenDisplay(nil)
+    loadScreens()
+    if(display == nil): quit "Failed to open display"
+
+    addWidgetFunctions()
+
+    screen = DefaultScreen(display)
+    root = RootWindow(display,screen)
+    discard XSetErrorHandler(errorHandler)
+    
+    discard XSelectInput(display,
+                    root,
+                    eventMask)
+    discard XSync(display,false)
+
+    initFromConfig()
+
 
 proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
@@ -391,7 +404,9 @@ proc frameWindow(w : TWindow)=
     workspace.windows.add(w)
     let frame = XCreateSimpleWindow(display,root,0,0,100,100,borderSize,0xFF00FF.culong,None)
 
-    discard XSelectInput(display,frame,PointerMotionMask or
+
+    discard XSelectInput(display,frame,SubstructureRedirectMask or
+                                    PointerMotionMask or
                                     EnterWindowMask or
                                     LeaveWindowMask or
                                     PropertyChangeMask)

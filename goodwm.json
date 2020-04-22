@@ -58,12 +58,31 @@
         {
             "desc": "Open Rofi",
             "key": "Super+D",
-            "command": "rofi -show run"
+            "command": "rofi -combi-modi window,drun -show combi -modi combi"
         },
         {
             "desc": "Open Flameshot",
             "key": "Control+Shift+3",
             "command": "flameshot gui"
+        },
+        {
+            "desc": "Exit Goodwm",
+            "key": "Super+Shift+E",
+            "command": "killall goodwm"
+        },
+        {
+            "desc": "Reload Config",
+            "key": "Super+Shift+R",
+            "command": "ReloadConfig"
         }
-    ]
+    ],
+    "screenlayout": [
+        "LeftAlternating",
+        "Vertical"
+    ],
+    "theme": {
+        "border-size": 10,
+        "background-normal": "#FF00FF",
+        "background-focus": "#00FF00"
+    }
 }
