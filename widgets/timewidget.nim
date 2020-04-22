@@ -3,6 +3,7 @@ import ../config
 import nimgl/imgui
 import times
 import osproc
+import strutils
 
 type
     TimeWidget = ref object of Widget
@@ -13,14 +14,14 @@ var
     time : string
 
 proc draw(fontSize,bwidth,bheight:float32)=
-    igSameLine(0,0)
+
     if(epochTime()-lastT >= delay):
         lastT = epochTime()
         time = execProcess("date +'%a %b %d,%l:%M%P%t'")
-    let offset = igCalcTextSize(time).x
-    igSetCursorPosX(bwidth - offset)
-    igSetCursorPosY(0)
-    igText(time)
+    let width = igCalcTextSize(time).x
+    let remaining = igGetContentRegionAvail().x
+    let label = repeat(' ',int((remaining - width)/igCalcTextSize(" ").x)) & time
+    igText(label)
     
 
 proc newTimeWidget*():TimeWidget = TimeWidget(draw : draw)

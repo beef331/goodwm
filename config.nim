@@ -30,6 +30,7 @@ var
     actionToConfigs = initTable[Action,KeyConfig]()
     keyConfigs : seq[KeyConfig]
     screenLayout = initTable[int,Layout]()
+    borderSize* : cint = 3
 
 const workspaceSymbols* = @["1","2","3","4","5","6","7","8","9"]
 

@@ -24,7 +24,8 @@ var
 const windowFlags =  ImGuiWindowFlags(
                                     ImGuiWindowFlags.NoDecoration.int or
                                     ImGuiWindowFlags.AlwaysAutoResize.int or
-                                    ImGuiWindowFlags.NoMove.int)
+                                    ImGuiWindowFlags.NoMove.int or
+                                    ImGuiWindowFlags.NoScrollWithMouse.int)
 
 
 proc barLoop*()=
@@ -37,9 +38,10 @@ proc barLoop*()=
         igSetNextWindowSize(ImVec2(x:bar.width,y:bar.height),ImGuiCond.Always)
         igSetNextWindowPos(ImVec2(x:0,y:0),ImGuiCond.Always)
         igBegin("Goodwm Status Bar",flags = windowFlags)
-
+        igSetScrollY(0)
         for x in bar.widgets:
             x.draw(fontsize,bar.width,bar.height)
+            igSameLine(0,0)
 
         igEnd()
         igRender()

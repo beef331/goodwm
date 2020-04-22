@@ -32,9 +32,6 @@ type
         barWin : TWindow
         bar : Bar
 
-proc mainWindow(a : Workspace):TWindow = a.windows[0]
-proc wincount(a : Workspace): int = a.windows.len
-
 var
     display:PDisplay
     root:TWindow
@@ -43,6 +40,12 @@ var
     screens : seq[Screen]
     selected = 0
     statusBarHeight : int32 = 30
+
+proc wincount(a : Workspace): int = a.windows.len
+proc activeTWindow(a : Workspace): TWindow = 
+    if(a.activeWindow in 0..<a.windows.len): 
+        a.windows[a.activeWindow] 
+    else: root
 
 let eventMask = SubstructureRedirectMask or
                 SubstructureNotifyMask or
@@ -64,11 +67,11 @@ proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScr
 
 proc activeWorkspaceEmpty():bool= selectedWorkspace().wincount() == 0
 
-proc activeWindow : var TWindow = selectedWorkspace().windows[selectedWorkspace().activeWindow]
+proc activeWindow : TWindow = selectedWorkspace().activeTWindow
 
-proc `[]=`(w : var Workspace, index : int, win : TWindow) = w.windows[index] = win
+proc `[]=`(w : Workspace, index : int, win : TWindow) = w.windows[index] = win
 
-proc `[]`(w : var Workspace, index : int) : TWindow = w.windows[index]
+proc `[]`(w : Workspace, index : int) : TWindow = w.windows[index]
 
 proc notBar(w :TWindow):bool=
     for screen in screens:
@@ -82,10 +85,10 @@ proc getFocus(moveCursor : bool = false)=
     if(not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount):
         selectedWorkspace().activeWindow = 0
     #Disable moving as it crashes
-    if(moveCursor and false):
-        var winAttr : PXWindowAttributes
-        let status = XGetWindowAttributes(display,activeWindow(),winAttr)
-        if(status != 0 ): discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+    if(moveCursor and activeWindow() != root):
+        var winAttr = TXWindowAttributes()
+        discard XGetWindowAttributes(display,activeWindow(),winAttr.addr)
+        discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
 
 proc drawBar(scr : Screen)=
     let barX : cint = scr.xOffset
@@ -147,7 +150,9 @@ proc drawLeftAlternatingSplit()=
         y = selScreen.yOffset
         width = selScreen.width
         height = selScreen.height - statusBarHeight
+
     var splitVert = true
+
     for i in 0..<workspace.wincount:
         let window = workspace.windows[i]
         let hasNext = (i + 1 < workspace.wincount)
@@ -157,24 +162,28 @@ proc drawLeftAlternatingSplit()=
         else: 
             if(i > 0): x += width
             if(hasNext): height = height.div(2)
-        winVals.x = x
-        winVals.y = y
-        winVals.width = width
-        winVals.height = height
+        winVals.x = x + borderSize
+        winVals.y = y + borderSize
+        winVals.width = width - borderSize * 2
+        winVals.height = height - borderSize * 2
         discard XConfigureWindow(display,window,flag,winVals.addr)
         splitVert = not splitVert
+
     selScreen.drawBar()
 
 proc moveWindowsHorz(right : bool = true)=
     if(selectedWorkspace().wincount() <= 1): return
     var workspace = selectedWorkspace()
     let sourceIndex = workspace.activeWindow
-    let activeWindow = workspace.windows[workspace.activeWindow]
+    let activeWin = workspace.activeTWindow
+
     let dir = if(right): 1 else: -1
+    
     let swapIndex = (sourceIndex + dir + workspace.wincount) %% workspace.wincount
+    
     workspace.activeWindow = swapIndex
-    workspace.windows[sourceIndex] =workspace.windows[swapIndex]
-    workspace.windows[swapIndex] = activeWindow
+    workspace[sourceIndex] = workspace.windows[swapIndex]
+    workspace[swapIndex] = activeWin
     selectedScreen().drawMode()
     getFocus(true)
 
@@ -285,9 +294,9 @@ proc loadScreens()=
             screen.bar = barPointer[0]
             screen.barWin = cast[TWindow](barPointer[1])
             screen.bar.addWidget(newWorkspaceList())
-            screen.bar.addWidget(newTimeWidget())
             screen.bar.addWidget(newLauncher())
             screen.bar.addWidget(newVolumeSlider())
+            screen.bar.addWidget(newTimeWidget())
         inc(screenIndex)
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
@@ -367,8 +376,9 @@ proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
     discard XAddToSaveSet(display,w)
     workspace.windows.add(w)
+    let frame = XCreateSimpleWindow(display,root,0,0,100,100,borderSize,0xFF00FF.culong,None)
     discard XSelectInput(display,w,PointerMotionMask or EnterWindowMask or LeaveWindowMask)
-    discard XReparentWindow(display,root,w,0,0)
+    discard XReparentWindow(display,frame,w,0,0)
     discard XMapWindow(display,w)
     selectedScreen().drawMode()
 
@@ -427,6 +437,9 @@ proc onEnterEvent(e : TXCrossingEvent)=
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
 proc onMotion(e : TXMotionEvent)=
+    for x in screens:
+        for y in 0..<x.workspaces.len:
+            let index = x.workspaces[y].windows.find(e.window)
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
 proc run()=
