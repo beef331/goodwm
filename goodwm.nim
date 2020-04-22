@@ -65,13 +65,17 @@ proc selectedScreen : var Screen = screens[selected]
 
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
 
-proc activeWorkspaceEmpty():bool= selectedWorkspace().wincount() == 0
+proc activeWorkspaceIsEmpty():bool= selectedWorkspace().wincount() == 0
 
 proc activeWindow : TWindow = selectedWorkspace().activeTWindow
 
 proc `[]=`(w : Workspace, index : int, win : TWindow) = w.windows[index] = win
 
 proc `[]`(w : Workspace, index : int) : TWindow = w.windows[index]
+
+proc `[]`(s: var Screen,index : int): var Workspace = s.workspaces[index]
+
+proc getActiveWorkspace(s : var Screen): var Workspace = s[s.activeWorkspace]
 
 proc notBar(w :TWindow):bool=
     for screen in screens:
@@ -81,7 +85,7 @@ proc notBar(w :TWindow):bool=
 proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
 
 proc getFocus(moveCursor : bool = false)=
-    if(selectedWorkspace().wincount == 0): return
+    if(activeWorkspaceIsEmpty()): return
     if(not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount):
         selectedWorkspace().activeWindow = 0
     #Disable moving as it crashes
@@ -188,7 +192,7 @@ proc moveWindowsHorz(right : bool = true)=
     getFocus(true)
 
 proc moveWindowToScreen(right : bool = true)=
-    if(activeWorkspaceEmpty()): return
+    if(activeWorkspaceIsEmpty()): return
 
     let activeWindow = activeWindow()
     let dir = if(right): 1 else : -1
@@ -205,6 +209,15 @@ proc moveWindowToScreen(right : bool = true)=
     selectedScreen().drawMode()
     getFocus(true)
 
+proc assignToActive(win : TWindow)=
+    ##This will search all screens and assign the window as active in the tiling logic
+    for x in 0..<screens.len:
+        var screen = screens[x]
+        var workspace = screen.getActiveWorkspace()
+        let index = workspace.windows.find(win)
+        if(index >= 0):
+            workspace.activeWindow = index
+
 proc focusScreen(right : bool = false)=
     let dir = if(right): 1 else : -1
     selected = (selected + dir + screens.len) %% screens.len
@@ -218,8 +231,8 @@ proc makeFocusedMain()=
     workspace.windows[focused] = workspace.windows[0]
     workspace.windows[0] = temp
     workspace.activeWindow = 0
-    getFocus(true)
     selectedScreen().drawMode()
+    getFocus(true)
 
 proc moveFocusHorz(right : bool = true)=
     if(selectedWorkspace().wincount() == 0): return
@@ -244,7 +257,7 @@ proc goToWorkspace(index : int)=
         getFocus()
 
 proc closeWindow()=
-    if(activeWorkspaceEmpty()): return
+    if(activeWorkspaceIsEmpty()): return
     var ev = TXEvent()
     ev.xclient.theType = ClientMessage
     ev.xclient.window = activeWindow()
@@ -361,23 +374,27 @@ proc setup()=
                                                     ButtonMotionMask)
 
 
-    getActionConfig(MoveLeft).action = proc() = moveWindowsHorz(false)
-    getActionConfig(MoveRight).action = proc() = moveWindowsHorz(true)
-    getActionConfig(FocusLeft).action = proc() = moveFocusHorz(false)
-    getActionConfig(FocusRight).action = proc() = moveFocusHorz(true)
-    getActionConfig(MakeMain).action = makeFocusedMain
-    getActionConfig(MoveScreenRight).action = proc() = moveWindowToScreen(true)
-    getActionConfig(MoveScreenLeft).action = proc() = moveWindowToScreen(false)
-    getActionConfig(CloseWindow).action = closeWindow
-    getActionConfig(FocusScreenRight).action = proc() = focusScreen(true)
-    getActionConfig(FocusScreenleft).action = proc() = focusScreen(false)
+    addActionToConfig(MoveLeft, proc() = moveWindowsHorz(false))
+    addActionToConfig(MoveRight, proc() = moveWindowsHorz(true))
+    addActionToConfig(FocusLeft, proc() = moveFocusHorz(false))
+    addActionToConfig(FocusRight, proc() = moveFocusHorz(true))
+    addActionToConfig(MakeMain, makeFocusedMain)
+    addActionToConfig(MoveScreenRight, proc() = moveWindowToScreen(true))
+    addActionToConfig(MoveScreenLeft, proc() = moveWindowToScreen(false))
+    addActionToConfig(CloseWindow, closeWindow)
+    addActionToConfig(FocusScreenRight, proc() = focusScreen(true))
+    addActionToConfig(FocusScreenleft, proc() = focusScreen(false))
 
 proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
     discard XAddToSaveSet(display,w)
     workspace.windows.add(w)
     let frame = XCreateSimpleWindow(display,root,0,0,100,100,borderSize,0xFF00FF.culong,None)
-    discard XSelectInput(display,w,PointerMotionMask or EnterWindowMask or LeaveWindowMask)
+
+    discard XSelectInput(display,frame,PointerMotionMask or
+                                    EnterWindowMask or
+                                    LeaveWindowMask or
+                                    PropertyChangeMask)
     discard XReparentWindow(display,frame,w,0,0)
     discard XMapWindow(display,w)
     selectedScreen().drawMode()
@@ -420,26 +437,15 @@ proc onKeyRelease(e : TXKeyEvent)=
 proc onButtonPressed(e:TXButtonEvent)=
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
-
 proc onButtonReleased(e:TXButtonEvent)=
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
-
 proc onEnterEvent(e : TXCrossingEvent)=
-    for x in 0..<screens.len:
-        let screen = screens[x]
-        let workspace = screen.workspaces[screen.activeWorkspace]
-        for y in 0..<workspace.wincount():
-            let win = workspace.windows[y]
-            if(e.window == win):
-                selected = x
-                screen.workspaces[screen.activeWorkspace].activeWindow = y
+    assignToActive(e.window)
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
 proc onMotion(e : TXMotionEvent)=
-    for x in screens:
-        for y in 0..<x.workspaces.len:
-            let index = x.workspaces[y].windows.find(e.window)
+    assignToActive(e.window)
     discard XSetInputFocus(display,e.window,RevertToPointerRoot,CurrentTime)
 
 proc run()=
@@ -467,10 +473,12 @@ proc run()=
                 onEnterEvent(ev.xcrossing)
             of MotionNotify:
                 onMotion(ev.xmotion)
+            of PropertyChangeMask:
+                echo "Got a property"
             else: discard
         if(epochTime() - lastDraw >= delay):
                 barLoop()
                 lastDraw = epochTime()
         sleep(10)
-run()
 
+run()
