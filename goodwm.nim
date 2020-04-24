@@ -1,4 +1,4 @@
-import x11/xlib,x11/x
+import x11/[xlib,x,xutil]
 import strformat
 import strutils
 import config
@@ -6,10 +6,7 @@ import osproc
 import nre
 import statusbar
 import widgetEvents
-import widgets/workspacelist
-import widgets/timewidget
-import widgets/launcher
-import widgets/volumeslider
+import widgets/[workspacelist,launcher,timewidget,volumeslider]
 import os
 import times
 
@@ -20,9 +17,13 @@ converter toTBool(x: bool): TBool = x.TBool
 converter toBool(x: TBool): bool = x.bool
 
 
-type 
+type
+    Window = ref object of RootObj
+        rawWindow : TWindow
+    FloatingWindow = ref object of Window
+        x,y,minw,maxw,minh,maxh : cint
     Workspace = ref object of RootObj
-        windows : seq[TWindow]
+        windows : seq[Window]
         activeWindow : int
     Screen = ref object of RootObj
         width,height,xOffset,yOffset : cint
@@ -44,8 +45,15 @@ var
 proc wincount(a : Workspace): int = a.windows.len
 proc activeTWindow(a : Workspace): TWindow = 
     if(a.activeWindow in 0..<a.windows.len): 
-        a.windows[a.activeWindow] 
+        a.windows[a.activeWindow].rawWindow
     else: root
+
+
+proc `[]=`(w : Workspace, index : int, win : Window) = w.windows[index] = win
+
+proc `[]`(w : Workspace, index : int) : Window = w.windows[index]
+
+proc `[]`(s: var Screen,index : int): var Workspace = s.workspaces[index]
 
 let eventMask = SubstructureRedirectMask or
                 SubstructureNotifyMask or
@@ -60,19 +68,26 @@ let eventMask = SubstructureRedirectMask or
                 EnterWindowMask or
                 LeaveWindowMask
 
+
+
+
 proc selectedScreen : var Screen = screens[selected]
 
 proc selectedWorkspace : var Workspace = selectedScreen().workspaces[selectedScreen().activeWorkspace]
 
 proc activeWorkspaceIsEmpty():bool= selectedWorkspace().wincount() == 0
 
-proc activeWindow : TWindow = selectedWorkspace().activeTWindow
+proc activeTWindow : TWindow = selectedWorkspace().activeTWindow
+proc activeWindow : Window = selectedWorkspace()[selectedWorkspace().activeWindow]
 
-proc `[]=`(w : Workspace, index : int, win : TWindow) = w.windows[index] = win
+proc isTiled(w:Window) : bool = not (w of FloatingWindow)
 
-proc `[]`(w : Workspace, index : int) : TWindow = w.windows[index]
+proc tiledWindowCount (w : Workspace): int = 
+    for x in w.windows:
+        if(x.isTiled): inc(result)
 
-proc `[]`(s: var Screen,index : int): var Workspace = s.workspaces[index]
+
+
 
 proc getActiveWorkspace(s : var Screen): var Workspace = s[s.activeWorkspace]
 
@@ -81,17 +96,19 @@ proc notBar(w :TWindow):bool=
         if(w == screen.barWin): return false
     return true
 
-proc inCurrentSpace(w : TWindow):bool = selectedWorkspace().windows.contains(w)
+proc inCurrentSpace(w : TWindow):bool = 
+    for x in selectedWorkspace().windows:
+        if(x.rawWindow == w): return true
 
 proc getFocus(moveCursor : bool = false)=
     if(activeWorkspaceIsEmpty()): return
     if(not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount):
         selectedWorkspace().activeWindow = 0
-    #Disable moving as it crashes
-    if(moveCursor and activeWindow() != root):
+
+    if(moveCursor and activeTWindow() != root):
         var winAttr = TXWindowAttributes()
-        discard XGetWindowAttributes(display,activeWindow(),winAttr.addr)
-        discard XWarpPointer(display,None,activeWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+        discard XGetWindowAttributes(display,activeTWindow(),winAttr.addr)
+        discard XWarpPointer(display,None,activeTWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
 
 proc drawBar(scr : Screen)=
     let barX : cint = scr.xOffset
@@ -108,12 +125,13 @@ proc drawHorizontalTiled()=
         selScreen = selectedScreen()
         x = selScreen.xOffset
         y = selScreen.yOffset
-        width = cint(selScreen.width.div(workspace.windows.len))
+        width = cint(selScreen.width.div(workspace.tiledWindowCount))
         height = selScreen.height - statusBarHeight
 
-    for window in workspace.windows:
-        x += width
-        discard XMoveResizeWindow(display,window,x,y,width,height)
+    for i in 0..<workspace.wincount:
+        if(workspace.windows[i].isTiled):
+            x += width
+            discard XMoveResizeWindow(display,workspace.windows[i].rawWindow,x,y,width,height)
     selScreen.drawBar()
 
 proc drawVerticalTiled()=
@@ -130,9 +148,11 @@ proc drawVerticalTiled()=
         height = cint((selScreen.height - statusBarHeight).div(workspace.windows.len))
 
     for i in 0..<workspace.wincount:
-        let window = workspace.windows[i]
-        if(i > 0): y += height
-        discard XMoveResizeWindow(display,window,x,y,width,height)
+        let window = workspace[i]
+        if(window.isTiled):
+            if(i > 0): y += height
+            discard XMoveResizeWindow(display,window.rawWindow,x,y,width,height)
+
     selScreen.drawBar()
 
 proc drawLeftAlternatingSplit()=
@@ -155,22 +175,25 @@ proc drawLeftAlternatingSplit()=
         height = selScreen.height - statusBarHeight
 
     var splitVert = true
-
+    let tiledCount = workspace.tiledWindowCount
+    var drawnWindows = 0
     for i in 0..<workspace.wincount:
-        let window = workspace.windows[i]
-        let hasNext = (i + 1 < workspace.wincount)
-        if(splitVert): 
-            if(i > 0): y += height
-            if(hasNext): width = width.div(2)
-        else: 
-            if(i > 0): x += width
-            if(hasNext): height = height.div(2)
-        winVals.x = x + borderSize
-        winVals.y = y + borderSize
-        winVals.width = width - borderSize * 2
-        winVals.height = height - borderSize * 2
-        discard XConfigureWindow(display,window,flag,winVals.addr)
-        splitVert = not splitVert
+        let window = workspace[i]
+        if(window.isTiled):
+            let hasNext = (i + 1 < workspace.wincount) and(drawnWindows < tiledCount)
+            if(splitVert): 
+                if(i > 0): y += height
+                if(hasNext): width = width.div(2)
+            else: 
+                if(i > 0): x += width
+                if(hasNext): height = height.div(2)
+            winVals.x = x + borderSize
+            winVals.y = y + borderSize
+            winVals.width = width - borderSize * 2
+            winVals.height = height - borderSize * 2
+            discard XConfigureWindow(display,window.rawWindow,flag,winVals.addr)
+            splitVert = not splitVert
+            inc(drawnWindows)
 
     selScreen.drawBar()
 
@@ -178,7 +201,7 @@ proc moveWindowsHorz(right : bool = true)=
     if(selectedWorkspace().wincount() <= 1): return
     var workspace = selectedWorkspace()
     let sourceIndex = workspace.activeWindow
-    let activeWin = workspace.activeTWindow
+    let activeWin = workspace[sourceIndex]
 
     let dir = if(right): 1 else: -1
     
@@ -213,9 +236,11 @@ proc assignToActive(win : TWindow)=
     for x in 0..<screens.len:
         var screen = screens[x]
         var workspace = screen.getActiveWorkspace()
-        let index = workspace.windows.find(win)
-        if(index >= 0):
-            workspace.activeWindow = index
+
+        for x in 0..<workspace.wincount:
+            if(workspace[x].rawWindow == win):
+                workspace.activeWindow = x
+                return
 
 proc focusScreen(right : bool = false)=
     let dir = if(right): 1 else : -1
@@ -245,12 +270,12 @@ proc goToWorkspace(index : int)=
     if(selectedScreen().activeWorkspace == index): return
     if(index >= 0 and index < selectedScreen().workspaces.len):
         for window in selectedWorkspace().windows:
-            discard XUnmapWindow(display,window)
+            discard XUnmapWindow(display,window.rawWindow)
         
         selectedScreen().activeWorkspace = index
 
         for window in selectedWorkspace().windows:
-            discard XMapWindow(display,window)
+            discard XMapWindow(display,window.rawWindow)
 
         selectedScreen().drawMode()
         getFocus()
@@ -259,12 +284,12 @@ proc closeWindow()=
     if(activeWorkspaceIsEmpty()): return
     var ev = TXEvent()
     ev.xclient.theType = ClientMessage
-    ev.xclient.window = activeWindow()
+    ev.xclient.window = activeTWindow()
     ev.xclient.message_type = XInternAtom(display,"WM_PROTOCOLS",true)
     ev.xclient.format = 32
     ev.xclient.data.l[0] = XInternAtom(display,"WM_DELETE_WINDOW",false).cint
     ev.xclient.data.l[1] = CurrentTime
-    discard XSendEvent(display,activeWindow(),false,NoEventMask,ev.addr)
+    discard XSendEvent(display,activeTWindow(),false,NoEventMask,ev.addr)
 
 proc errorHandler(disp: PDisplay, error: PXErrorEvent):cint{.cdecl.}=
     echo error.theType
@@ -401,7 +426,12 @@ proc setup()=
 proc frameWindow(w : TWindow)=
     var workspace = selectedWorkspace()
     discard XAddToSaveSet(display,w)
-    workspace.windows.add(w)
+    var sizeHints = XAllocSizeHints()
+    var returnMask : int
+    discard XGetNormalHints(display,w,sizeHints)
+    echo sizeHints[]
+    workspace.windows.add(Window(rawWindow:w))
+
     let frame = XCreateSimpleWindow(display,root,0,0,100,100,borderSize,0xFF00FF.culong,None)
 
 
@@ -427,7 +457,7 @@ proc onWindowDestroy(e : TXDestroyWindowEvent)=
             if(workspace.wincount() > 0):
                 #Get window to delete
                 for window in 0..<workspace.windows.len:
-                    if(workspace.windows[window] == e.window):
+                    if(workspace.windows[window].rawWindow == e.window):
                         toDelete = window
                         break
 
