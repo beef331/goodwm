@@ -23,7 +23,9 @@ type
         FocusRight,
         FocusLeft,
         MakeMain,
-        ReloadConfig
+        MakeFullScreen,
+        MakeFloating,
+        ReloadConfig,
         NoAction
     Layout* = enum
         LeftAlternating,LeftSpiral,Horizontal,Vertical
@@ -110,7 +112,7 @@ proc loadConfig* (display : PDisplay)=
             inc(index)
         except:
             echo fmt"{x.getStr()} offers an incorrect layout, refer to docs."
-    echo screenLayout
+
     let theme = cfgJson["theme"]
     if(theme["border-size"] != nil):
         borderSize = theme["border-size"].getInt().cint

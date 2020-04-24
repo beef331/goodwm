@@ -74,6 +74,16 @@
             "desc": "Reload Config",
             "key": "Super+Shift+R",
             "command": "ReloadConfig"
+        },
+        {
+            "desc": "Fullscreen window",
+            "key": "Super+F",
+            "command": "MakeFullScreen"
+        },
+        {
+            "desc": "Toggle Floating Window",
+            "key": "Super+Shift+F",
+            "command": "MakeFloating"
         }
     ],
     "screenlayout": [

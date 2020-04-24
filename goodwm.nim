@@ -20,6 +20,7 @@ converter toBool(x: TBool): bool = x.bool
 type
     Window = ref object of RootObj
         rawWindow: TWindow
+        fullScreen : bool
     FloatingWindow = ref object of Window
         x, y, minw, maxw, minh, maxh: cint
     Workspace = ref object of RootObj
@@ -58,6 +59,7 @@ proc `[]`(w: Workspace, index: int): Window = w.windows[index]
 
 proc `[]`(s: var Screen, index: int): var Workspace = s.workspaces[index]
 
+
 let eventMask = SubstructureRedirectMask or
                 SubstructureNotifyMask or
                 StructureNotifyMask or
@@ -68,9 +70,8 @@ let eventMask = SubstructureRedirectMask or
                 EnterWindowMask or
                 LeaveWindowMask or
                 PointerMotionMask or
-                EnterWindowMask or
-                LeaveWindowMask
-
+                PropertyChangeMask or
+                ResizeRedirectMask
 
 
 
@@ -90,12 +91,9 @@ proc tiledWindowCount (w: Workspace): int =
     for x in w.windows:
         if(x.isTiled): inc(result)
 
-
-
-
 proc getActiveWorkspace(s: var Screen): var Workspace = s[s.activeWorkspace]
 
-proc notBar(w: TWindow): bool =
+proc isNotBar(w: TWindow): bool =
     for screen in screens:
         if(w == screen.barWin): return false
     return true
@@ -186,13 +184,16 @@ proc drawLeftAlternatingSplit() =
     var drawnWindows = 0
     for i in 0..<workspace.wincount:
         let window = workspace[i]
+        if(window.fullScreen):
+            discard XMoveResizeWindow(display,window.rawWindow,selScreen.xOffset,selScreen.yOffset,selScreen.width,selScreen.height)
+            return #We have a full screen application we dont need to tile shit
         if(window.isTiled):
             let hasNext = (i + 1 < workspace.wincount) and (drawnWindows < tiledCount)
             if(splitVert):
-                if(i > 0): y += height
+                if(drawnWindows > 0): y += height
                 if(hasNext): width = width.div(2)
             else:
-                if(i > 0): x += width
+                if(drawnWindows > 0): x += width
                 if(hasNext): height = height.div(2)
             winVals.x = x + borderSize
             winVals.y = y + borderSize
@@ -201,6 +202,7 @@ proc drawLeftAlternatingSplit() =
             discard XConfigureWindow(display, window.rawWindow, flag, winVals.addr)
             splitVert = not splitVert
             inc(drawnWindows)
+        else: discard XRaiseWindow(display,window.rawWindow)
 
     selScreen.drawBar()
 
@@ -304,6 +306,29 @@ proc closeWindow() =
 proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint{.cdecl.} =
     echo error.theType
 
+proc toggleActiveFullScreen()=
+    if(not activeWorkspaceIsEmpty() and activeTWindow().isNotBar()):
+        var win = activeWindow()
+        win.fullScreen = not win.fullScreen
+        if(win.fullScreen):
+            discard XMoveResizeWindow(display,win.rawWindow,selectedScreen().xOffset,selectedScreen().yOffset,selectedScreen().width,selectedScreen().height)
+            discard XRaiseWindow(display,win.rawWindow)
+            getFocus(true)
+        else:
+            getFocus(true)
+            selectedScreen().drawMode()
+
+proc toggleFloatingWindow()=
+    if(not activeWorkspaceIsEmpty() and activeTWindow().isNotBar()):
+        let win = activeWindow()
+        if(win.isTiled): selectedWorkspace()[selectedWorkspace().activeWindow] = FloatingWindow(rawWindow : win.rawWindow)
+        else: selectedWorkspace()[selectedWorkspace().activeWindow] = Window(rawWindow : win.rawWindow)
+        echo fmt"Window is currently tiled: {activeWindow().isTiled}"
+        selectedScreen().drawMode()
+
+    discard
+
+
 proc loadScreens() =
     let monitorReg = re"\d:.*"
     let sizeReg = re"\d*\/"
@@ -341,6 +366,8 @@ proc loadScreens() =
         screens.add(screen)
         echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
+
+
 proc initFromConfig() =
     loadConfig(display)
     for key in keyConfs():
@@ -371,7 +398,6 @@ proc initFromConfig() =
 
     for screen in screens:
         #Assign layout
-        echo getScreenLayout(screenIndex)
         case(getScreenLayout(screenIndex)):
         of Horizontal:
             screen.drawMode = drawHorizontalTiled
@@ -411,6 +437,8 @@ proc initFromConfig() =
     addActionToConfig(FocusScreenRight, proc() = focusScreen(true))
     addActionToConfig(FocusScreenleft, proc() = focusScreen(false))
     addActionToConfig(ReloadConfig, widgetEvents.invokeReloadConfig)
+    addActionToConfig(MakeFullScreen,toggleActiveFullScreen)
+    addActionToConfig(MakeFloating,toggleFloatingWindow)
 
 
     var wa = TXSetWindowAttributes()
@@ -462,16 +490,15 @@ proc frameWindow(w: TWindow) =
                                             minh: sizeHints.min_height,
                                             maxh: sizeHints.max_height))
     else: workspace.windows.add(Window(rawWindow: w))
-
     let frame = XCreateSimpleWindow(display, root, 0, 0, sizeHints.min_width,
             sizeHints.min_width, borderSize, 0xFF00FF.culong, None)
 
 
     discard XSelectInput(display, frame, SubstructureRedirectMask or
-                                    PointerMotionMask or
-                                    EnterWindowMask or
-                                    LeaveWindowMask or
-                                    PropertyChangeMask)
+                                        PointerMotionMask or
+                                        EnterWindowMask or
+                                        LeaveWindowMask or
+                                        PropertyChangeMask)
     discard XReparentWindow(display, frame, w, 0, 0)
     discard XMapWindow(display, w)
     selectedScreen().drawMode()
@@ -513,7 +540,8 @@ proc onKeyRelease(e: TXKeyEvent) =
     else: discard
 
 proc onButtonPressed(e: TXButtonEvent) =
-    if(selectedWorkspace().wincount > 0 and (e.state and Mod1Mask) == Mod1Mask and not activeWindow().isTiled):
+    assignToActive(e.window)
+    if(selectedWorkspace().wincount > 0 and (e.state and Mod4Mask) == Mod4Mask and not activeWindow().isTiled):
         case e.button: 
             of 1: 
                 mouseState = Moving
@@ -529,19 +557,19 @@ proc onButtonPressed(e: TXButtonEvent) =
                 discard XWarpPointer(display,None,activeWindow().rawWindow,0,0,0,0,
                                     winAttr.width,
                                     winAttr.height)
-
             else : mouseState = Nothing
+
     #If we dont have a current process might as well get a window
     if(mouseState == Nothing):
-        discard XSetInputFocus(display, e.window, RevertToPointerRoot, CurrentTime)
+        discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc onButtonReleased(e: TXButtonEvent) =
     mouseState = Nothing
-    discard XSetInputFocus(display, e.window, RevertToPointerRoot, CurrentTime)
+    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc onEnterEvent(e: TXCrossingEvent) =
     assignToActive(e.window)
-    discard XSetInputFocus(display, e.window, RevertToPointerRoot, CurrentTime)
+    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc onMotion(e: TXMotionEvent) =
     if(selectedWorkspace().wincount > 0):
@@ -557,7 +585,7 @@ proc onMotion(e: TXMotionEvent) =
             discard XResizeWindow(display,activeTWindow(),e.x - winAttr.x, e.y - winattr.y)
         of Nothing:
             assignToActive(e.window)
-            discard XSetInputFocus(display, e.window, RevertToPointerRoot, CurrentTime)
+            discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc run() =
     setup()
@@ -584,12 +612,14 @@ proc run() =
                 onEnterEvent(ev.xcrossing)
             of MotionNotify:
                 onMotion(ev.xmotion)
-            of PropertyChangeMask:
-                echo "Got a property"
+            of PropertyNotify:
+                echo ev.xproperty
             else: discard
         if(epochTime() - lastDraw >= delay):
             barLoop()
             lastDraw = epochTime()
-        sleep(10)
+        #idk let's see if this fixes gnome
+        selectedScreen().drawMode()
+        sleep(1)
 
 run()
