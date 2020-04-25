@@ -28,7 +28,13 @@ type
         ReloadConfig,
         NoAction
     Layout* = enum
-        LeftAlternating,LeftSpiral,Horizontal,Vertical
+        LeftAlternating,
+        RightAlternating,
+        #Probably wont have this one 
+        LeftSpiral,
+        Horizontal,
+        Vertical
+
     KeyConfig* = ref object
         modifiers* : cint
         keycode* : cuint

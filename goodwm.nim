@@ -9,6 +9,7 @@ import widgetEvents
 import widgets/[workspacelist, launcher, timewidget, volumeslider]
 import os
 import times
+import sugar
 
 converter toCint(x: TKeyCode): cint = x.cint
 converter int32toCint(x: int32): cint = x.cint
@@ -70,8 +71,7 @@ let eventMask = SubstructureRedirectMask or
                 EnterWindowMask or
                 LeaveWindowMask or
                 PointerMotionMask or
-                PropertyChangeMask or
-                ResizeRedirectMask
+                PropertyChangeMask
 
 
 
@@ -160,7 +160,7 @@ proc drawVerticalTiled() =
 
     selScreen.drawBar()
 
-proc drawLeftAlternatingSplit() =
+proc drawAlternatingSplit(rightMain : bool = false) =
     ##Draw Main left with alternating split
 
     let workspace = selectedWorkspace()
@@ -197,8 +197,14 @@ proc drawLeftAlternatingSplit() =
                 if(hasNext): height = height.div(2)
             winVals.x = x + borderSize
             winVals.y = y + borderSize
+        
+
+
             winVals.width = width - borderSize * 2
             winVals.height = height - borderSize * 2
+            #If right is main screen.Width - x - width gives right position
+            if(rightMain and tiledCount > 1):
+                winVals.x = (selScreen.width - winVals.x - winVals.width) + selScreen.xOffset 
             discard XConfigureWindow(display, window.rawWindow, flag, winVals.addr)
             splitVert = not splitVert
             inc(drawnWindows)
@@ -253,6 +259,7 @@ proc assignToActive(win: TWindow) =
                 return
 
 proc focusScreen(right: bool = false) =
+    ##Move cursor to screen and focus first window
     let dir = if(right): 1 else: -1
     selected = (selected + dir + screens.len) %% screens.len
     discard XWarpPointer(display, None, root, 0, 0, 0, 0, selectedScreen().width.div(
@@ -260,6 +267,7 @@ proc focusScreen(right: bool = false) =
             selectedScreen().yOffset)
 
 proc makeFocusedMain() =
+    ##When using main child setups this moves the window to index 0, will bring to top of vertical/horizontal tiles
     if(selectedWorkspace().wincount() < 1): return
     var workspace = selectedWorkspace()
     var temp = activeWindow()
@@ -271,6 +279,7 @@ proc makeFocusedMain() =
     getFocus(true)
 
 proc moveFocusHorz(right: bool = true) =
+    ##Move focus horizontally in the array either left or right
     if(selectedWorkspace().wincount() == 0): return
     var index = selectedWorkspace().activeWindow
     let dir = if(right): 1 else: -1
@@ -279,6 +288,8 @@ proc moveFocusHorz(right: bool = true) =
     getFocus(true)
 
 proc goToWorkspace(index: int) =
+    ##Go to currently selected monitors specifed workspace
+    echo index
     if(selectedScreen().activeWorkspace == index): return
     if(index >= 0 and index < selectedScreen().workspaces.len):
         for window in selectedWorkspace().windows:
@@ -293,6 +304,7 @@ proc goToWorkspace(index: int) =
         getFocus()
 
 proc closeWindow() =
+    ##Makes a proper XServer message for killing windows
     if(activeWorkspaceIsEmpty()): return
     var ev = TXEvent()
     ev.xclient.theType = ClientMessage
@@ -307,6 +319,7 @@ proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint{.cdecl.} =
     echo error.theType
 
 proc toggleActiveFullScreen()=
+    ##Toggle fullscreen on currently selected window
     if(not activeWorkspaceIsEmpty() and activeTWindow().isNotBar()):
         var win = activeWindow()
         win.fullScreen = not win.fullScreen
@@ -319,6 +332,7 @@ proc toggleActiveFullScreen()=
             selectedScreen().drawMode()
 
 proc toggleFloatingWindow()=
+    ##Toggles floating on currently selected window
     if(not activeWorkspaceIsEmpty() and activeTWindow().isNotBar()):
         let win = activeWindow()
         if(win.isTiled): selectedWorkspace()[selectedWorkspace().activeWindow] = FloatingWindow(rawWindow : win.rawWindow)
@@ -330,6 +344,7 @@ proc toggleFloatingWindow()=
 
 
 proc loadScreens() =
+    ##Use xrandr through shell to get active monitor information, should be using the xrandr.nim library
     let monitorReg = re"\d:.*"
     let sizeReg = re"\d*\/"
     let offsetReg = re"\+[\d]+"
@@ -369,6 +384,7 @@ proc loadScreens() =
 
 
 proc initFromConfig() =
+    ##load config and setup harcoded keybinds
     loadConfig(display)
     for key in keyConfs():
         discard XGrabKey(
@@ -382,8 +398,9 @@ proc initFromConfig() =
 
     var screenIndex = 0
 
+    #Intialize hardcoded workspace switching keybinds
     for i in 0..9:
-        let actualNum = (i - 1 + 10) %% 10
+        let actualNum = (i - 1 + 10) %% 10 #0-9 values on keys
         let keycode = XKeysymToKeycode(display, XStringToKeysym($actualNum))
         discard XGrabKey(
                 display,
@@ -393,16 +410,19 @@ proc initFromConfig() =
                 true,
                 GrabModeAsync,
                 GrabModeAsync)
-        let keyConf = newKeyConfig(keycode.cuint, Mod4Mask, proc() = goToWorkspace(actualNum))
-        addInput(keyConf)
-
+        #inside the proc the value is always the last iteration value
+        capture [actualNum]:
+            var keyConf = newKeyConfig(keycode.cuint, Mod4Mask,proc() = goToWorkspace(actualNum))
+            addInput(keyConf)
     for screen in screens:
         #Assign layout
         case(getScreenLayout(screenIndex)):
         of Horizontal:
             screen.drawMode = drawHorizontalTiled
         of LeftAlternating:
-            screen.drawMode = drawLeftAlternatingSplit
+            screen.drawMode = proc() = drawAlternatingSplit(false)
+        of RightAlternating:
+            screen.drawMode = proc() = drawAlternatingSplit(true)
         of Vertical:
             screen.drawMode = drawVerticalTiled
         else: screen.drawMode = drawHorizontalTiled
@@ -583,9 +603,9 @@ proc onMotion(e: TXMotionEvent) =
             var winAttr = TXWindowAttributes()
             discard XGetWindowAttributes(display,activeTWindow(),winAttr.addr)
             discard XResizeWindow(display,activeTWindow(),e.x - winAttr.x, e.y - winattr.y)
-        of Nothing:
-            assignToActive(e.window)
-            discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
+        of Nothing:discard
+    assignToActive(e.window)
+    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc run() =
     setup()
@@ -613,7 +633,7 @@ proc run() =
             of MotionNotify:
                 onMotion(ev.xmotion)
             of PropertyNotify:
-                echo ev.xproperty
+                echo "Recieved a property"
             else: discard
         if(epochTime() - lastDraw >= delay):
             barLoop()

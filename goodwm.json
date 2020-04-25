@@ -53,7 +53,7 @@
         {
             "desc": "Open Browser",
             "key": "Super+B",
-            "command": "google-chrome"
+            "command": "google-stable & disown"
         },
         {
             "desc": "Open Rofi",
@@ -91,7 +91,7 @@
         "Vertical"
     ],
     "theme": {
-        "border-size": 10,
+        "border-size": 20,
         "background-normal": "#FF00FF",
         "background-focus": "#00FF00"
     }
