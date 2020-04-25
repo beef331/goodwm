@@ -10,7 +10,7 @@ proc draw(fontSize,bwidth,bheight:float32)=
     var style = igGetStyle()
     
     for x in 0..<workspaceSymbols.len:
-        if(igButton(workspaceSymbols[x],ImVec2(x:fontsize,y:bheight))): invokeGoToWorkspace(x)
+        if(igButton(workspaceSymbols[x],ImVec2(x:fontsize,y:bheight))): invokeGoToWorkspace(x+1)
         igSameLine(0,0)
 
 proc newWorkspaceList*():WorkspaceList = WorkspaceList(draw : draw)

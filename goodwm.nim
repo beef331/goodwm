@@ -289,13 +289,31 @@ proc moveFocusHorz(right: bool = true) =
 
 proc goToWorkspace(index: int) =
     ##Go to currently selected monitors specifed workspace
-    echo index
     if(selectedScreen().activeWorkspace == index): return
     if(index >= 0 and index < selectedScreen().workspaces.len):
         for window in selectedWorkspace().windows:
             discard XUnmapWindow(display, window.rawWindow)
 
         selectedScreen().activeWorkspace = index
+
+        for window in selectedWorkspace().windows:
+            discard XMapWindow(display, window.rawWindow)
+
+        selectedScreen().drawMode()
+        getFocus()
+
+proc moveWindowToWorkspace(index : int)=
+    if(selectedScreen().activeWorkspace == index): return
+    if(index >= 0 and index < selectedScreen().workspaces.len):
+        for window in selectedWorkspace().windows:
+            discard XUnmapWindow(display, window.rawWindow)
+
+        let windowToMove = activeWindow()
+        let toDelete = selectedScreen().getActiveWorkspace().windows.find(windowToMove)
+        if(toDelete >= 0): selectedScreen().getActiveWorkspace().windows.delete(toDelete)
+        selectedScreen().activeWorkspace = index
+        selectedScreen().getActiveWorkspace().windows.add(windowToMove)
+
 
         for window in selectedWorkspace().windows:
             discard XMapWindow(display, window.rawWindow)
@@ -400,20 +418,30 @@ proc initFromConfig() =
 
     #Intialize hardcoded workspace switching keybinds
     for i in 0..9:
-        let actualNum = (i - 1 + 10) %% 10 #0-9 values on keys
-        let keycode = XKeysymToKeycode(display, XStringToKeysym($actualNum))
-        discard XGrabKey(
-                display,
-                keycode,
-                Mod4Mask,
-                root,
-                true,
-                GrabModeAsync,
-                GrabModeAsync)
-        #inside the proc the value is always the last iteration value
-        capture [actualNum]:
-            var keyConf = newKeyConfig(keycode.cuint, Mod4Mask,proc() = goToWorkspace(actualNum))
-            addInput(keyConf)
+            let actualNum = (i - 1 + 10) %% 10 #0-9 values on keys
+            let keycode = XKeysymToKeycode(display, XStringToKeysym($actualNum))
+            discard XGrabKey(
+                    display,
+                    keycode,
+                    Mod4Mask or ShiftMask,
+                    root,
+                    true,
+                    GrabModeAsync,
+                    GrabModeAsync)
+            discard XGrabKey(
+                    display,
+                    keycode,
+                    Mod4Mask,
+                    root,
+                    true,
+                    GrabModeAsync,
+                    GrabModeAsync)
+            #inside the proc the value is always the last iteration value
+            capture [actualNum]:
+                var keyConf = newKeyConfig(keycode.cuint, Mod4Mask,proc() = goToWorkspace(actualNum))
+                addInput(keyConf)
+                keyConf = newKeyConfig(keycode.cuint, Mod4Mask or ShiftMask,proc() = moveWindowToWorkspace(actualNum))
+                addInput(keyConf)
     for screen in screens:
         #Assign layout
         case(getScreenLayout(screenIndex)):
@@ -467,16 +495,19 @@ proc initFromConfig() =
     discard XChangeWindowAttributes(display, root, CWEventMask or CWCursor, wa.addr)
 
 proc reloadConfig() =
+    ##Clears previously got keys and re-adds them
     discard XUngrabKey(display, AnyKey, AnyModifier, root)
     initFromConfig()
     for screen in screens:
         screen.drawMode()
 
 proc addWidgetFunctions() =
+    ##Adds functions usable from outside this file
     widgetEvents.goToWorkspace = goToWorkspace
     widgetEvents.reloadConfig = reloadConfig
 
 proc setup() =
+    ##Initialize the XDisplay and set everything up
     display = XOpenDisplay(nil)
     loadScreens()
     if(display == nil): quit "Failed to open display"
@@ -608,6 +639,7 @@ proc onMotion(e: TXMotionEvent) =
     discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc run() =
+    ##The main loop, it's main.
     setup()
     runScript()
     var ev: TXEvent = TXEvent()
@@ -638,8 +670,6 @@ proc run() =
         if(epochTime() - lastDraw >= delay):
             barLoop()
             lastDraw = epochTime()
-        #idk let's see if this fixes gnome
-        selectedScreen().drawMode()
         sleep(1)
 
 run()

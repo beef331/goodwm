@@ -91,7 +91,7 @@
         "Vertical"
     ],
     "theme": {
-        "border-size": 20,
+        "border-size": 10,
         "background-normal": "#FF00FF",
         "background-focus": "#00FF00"
     }
