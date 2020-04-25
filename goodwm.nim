@@ -47,6 +47,7 @@ var
     statusBarHeight: int32 = 30
     mouseState = Nothing
 
+
 proc wincount(a: Workspace): int = a.windows.len
 proc activeTWindow(a: Workspace): TWindow =
     if(a.activeWindow in 0..<a.windows.len):
@@ -70,9 +71,7 @@ let eventMask = SubstructureRedirectMask or
                 KeyReleaseMask or
                 EnterWindowMask or
                 LeaveWindowMask or
-                PointerMotionMask or
-                PropertyChangeMask
-
+                PointerMotionMask
 
 
 proc selectedScreen: var Screen = screens[selected]
@@ -103,15 +102,13 @@ proc inCurrentSpace(w: TWindow): bool =
         if(x.rawWindow == w): return true
 
 proc getFocus(moveCursor: bool = false) =
-    if(activeWorkspaceIsEmpty()): return
-    if(not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount):
-        selectedWorkspace().activeWindow = 0
+    if(activeWorkspaceIsEmpty() or not selectedWorkspace().activeWindow in 0..<selectedWorkspace().wincount): return
 
-    if(moveCursor and activeTWindow() != root):
+    if(moveCursor):
         var winAttr = TXWindowAttributes()
         discard XGetWindowAttributes(display, activeTWindow(), winAttr.addr)
-        discard XWarpPointer(display, None, activeTWindow(), 0, 0, 0, 0,
-                winAttr.width.div(2), winAttr.height.div(2))
+        discard XWarpPointer(display,None,activeTWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
+
 
 proc drawBar(scr: Screen) =
     let barX: cint = scr.xOffset
@@ -197,15 +194,16 @@ proc drawAlternatingSplit(rightMain : bool = false) =
                 if(hasNext): height = height.div(2)
             winVals.x = x + borderSize
             winVals.y = y + borderSize
-        
-
 
             winVals.width = width - borderSize * 2
             winVals.height = height - borderSize * 2
             #If right is main screen.Width - x - width gives right position
             if(rightMain and tiledCount > 1):
                 winVals.x = (selScreen.width - winVals.x - winVals.width) + selScreen.xOffset 
+
+
             discard XConfigureWindow(display, window.rawWindow, flag, winVals.addr)
+
             splitVert = not splitVert
             inc(drawnWindows)
         else: discard XRaiseWindow(display,window.rawWindow)
@@ -300,7 +298,7 @@ proc goToWorkspace(index: int) =
             discard XMapWindow(display, window.rawWindow)
 
         selectedScreen().drawMode()
-        getFocus()
+        getFocus(true)
 
 proc moveWindowToWorkspace(index : int)=
     if(selectedScreen().activeWorkspace == index): return
@@ -319,7 +317,7 @@ proc moveWindowToWorkspace(index : int)=
             discard XMapWindow(display, window.rawWindow)
 
         selectedScreen().drawMode()
-        getFocus()
+        getFocus(true)
 
 proc closeWindow() =
     ##Makes a proper XServer message for killing windows
@@ -418,30 +416,31 @@ proc initFromConfig() =
 
     #Intialize hardcoded workspace switching keybinds
     for i in 0..9:
-            let actualNum = (i - 1 + 10) %% 10 #0-9 values on keys
-            let keycode = XKeysymToKeycode(display, XStringToKeysym($actualNum))
-            discard XGrabKey(
-                    display,
-                    keycode,
-                    Mod4Mask or ShiftMask,
-                    root,
-                    true,
-                    GrabModeAsync,
-                    GrabModeAsync)
-            discard XGrabKey(
-                    display,
-                    keycode,
-                    Mod4Mask,
-                    root,
-                    true,
-                    GrabModeAsync,
-                    GrabModeAsync)
-            #inside the proc the value is always the last iteration value
-            capture [actualNum]:
+            capture [i]:
+                let actualNum = (i - 1 + 10) %% 10 #0-9 values on keys
+                let keycode = XKeysymToKeycode(display, XStringToKeysym($actualNum))
+                discard XGrabKey(
+                        display,
+                        keycode,
+                        Mod4Mask or ShiftMask,
+                        root,
+                        true,
+                        GrabModeAsync,
+                        GrabModeAsync)
+                discard XGrabKey(
+                        display,
+                        keycode,
+                        Mod4Mask,
+                        root,
+                        true,
+                        GrabModeAsync,
+                        GrabModeAsync)
+                #inside the proc the value is always the last iteration value
                 var keyConf = newKeyConfig(keycode.cuint, Mod4Mask,proc() = goToWorkspace(actualNum))
                 addInput(keyConf)
                 keyConf = newKeyConfig(keycode.cuint, Mod4Mask or ShiftMask,proc() = moveWindowToWorkspace(actualNum))
                 addInput(keyConf)
+
     for screen in screens:
         #Assign layout
         case(getScreenLayout(screenIndex)):
@@ -497,6 +496,7 @@ proc initFromConfig() =
 proc reloadConfig() =
     ##Clears previously got keys and re-adds them
     discard XUngrabKey(display, AnyKey, AnyModifier, root)
+    discard XUngrabButton(display,AnyButton,AnyModifier,root)
     initFromConfig()
     for screen in screens:
         screen.drawMode()
@@ -518,17 +518,16 @@ proc setup() =
     root = RootWindow(display, screen)
     discard XSetErrorHandler(errorHandler)
 
+    initFromConfig()
+
     discard XSelectInput(display,
                     root,
                     eventMask)
-    discard XSync(display, false)
-
-    initFromConfig()
+    discard XSync(display, true)
 
 
 proc frameWindow(w: TWindow) =
     var workspace = selectedWorkspace()
-    discard XAddToSaveSet(display, w)
     var sizeHints = XAllocSizeHints()
     var returnMask: int
     discard XGetWMNormalHints(display, w, sizeHints, addr returnMask)
@@ -541,16 +540,10 @@ proc frameWindow(w: TWindow) =
                                             minh: sizeHints.min_height,
                                             maxh: sizeHints.max_height))
     else: workspace.windows.add(Window(rawWindow: w))
-    let frame = XCreateSimpleWindow(display, root, 0, 0, sizeHints.min_width,
-            sizeHints.min_width, borderSize, 0xFF00FF.culong, None)
 
 
-    discard XSelectInput(display, frame, SubstructureRedirectMask or
-                                        PointerMotionMask or
-                                        EnterWindowMask or
-                                        LeaveWindowMask or
-                                        PropertyChangeMask)
-    discard XReparentWindow(display, frame, w, 0, 0)
+    discard XSelectInput(display, w,EnterWindowMask or
+                                        LeaveWindowMask)
     discard XMapWindow(display, w)
     selectedScreen().drawMode()
 
@@ -591,8 +584,8 @@ proc onKeyRelease(e: TXKeyEvent) =
     else: discard
 
 proc onButtonPressed(e: TXButtonEvent) =
-    assignToActive(e.window)
     if(selectedWorkspace().wincount > 0 and (e.state and Mod4Mask) == Mod4Mask and not activeWindow().isTiled):
+        assignToActive(e.window)
         case e.button: 
             of 1: 
                 mouseState = Moving
@@ -608,17 +601,15 @@ proc onButtonPressed(e: TXButtonEvent) =
                 discard XWarpPointer(display,None,activeWindow().rawWindow,0,0,0,0,
                                     winAttr.width,
                                     winAttr.height)
-            else : mouseState = Nothing
-
-    #If we dont have a current process might as well get a window
-    if(mouseState == Nothing):
-        discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
+            else : 
+                mouseState = Nothing
+                discard XSetInputFocus(display,e.window,RevertToNone,CurrentTime)
 
 proc onButtonReleased(e: TXButtonEvent) =
     mouseState = Nothing
-    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc onEnterEvent(e: TXCrossingEvent) =
+    mouseState = Nothing
     assignToActive(e.window)
     discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
@@ -635,8 +626,6 @@ proc onMotion(e: TXMotionEvent) =
             discard XGetWindowAttributes(display,activeTWindow(),winAttr.addr)
             discard XResizeWindow(display,activeTWindow(),e.x - winAttr.x, e.y - winattr.y)
         of Nothing:discard
-    assignToActive(e.window)
-    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc run() =
     ##The main loop, it's main.
@@ -664,8 +653,6 @@ proc run() =
                 onEnterEvent(ev.xcrossing)
             of MotionNotify:
                 onMotion(ev.xmotion)
-            of PropertyNotify:
-                echo "Recieved a property"
             else: discard
         if(epochTime() - lastDraw >= delay):
             barLoop()
