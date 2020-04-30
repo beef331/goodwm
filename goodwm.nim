@@ -1,4 +1,4 @@
-import x11/[xlib, x, xutil]
+import x11/[xlib, x, xutil,xatom]
 import strformat
 import strutils
 import config
@@ -16,7 +16,7 @@ converter int32toCint(x: int32): cint = x.cint
 converter int32toCUint(x: int32): cuint = x.cuint
 converter toTBool(x: bool): TBool = x.TBool
 converter toBool(x: TBool): bool = x.bool
-
+proc `!`(x:bool): bool = not x
 
 type
     Window = ref object of RootObj
@@ -71,7 +71,8 @@ let eventMask = SubstructureRedirectMask or
                 KeyReleaseMask or
                 EnterWindowMask or
                 LeaveWindowMask or
-                PointerMotionMask
+                PointerMotionMask or
+                PropertyChangeMask
 
 
 proc selectedScreen: var Screen = screens[selected]
@@ -108,7 +109,6 @@ proc getFocus(moveCursor: bool = false) =
         var winAttr = TXWindowAttributes()
         discard XGetWindowAttributes(display, activeTWindow(), winAttr.addr)
         discard XWarpPointer(display,None,activeTWindow(),0,0,0,0,winAttr.width.div(2),winAttr.height.div(2))
-
 
 proc drawBar(scr: Screen) =
     let barX: cint = scr.xOffset
@@ -210,6 +210,59 @@ proc drawAlternatingSplit(rightMain : bool = false) =
 
     selScreen.drawBar()
 
+proc drawMainSplit(rightMain : bool = false) =
+    ##Draw Main left/right with opposing side vertically stacked
+
+    let workspace = selectedWorkspace()
+
+    #We dont have any windows, dont draw
+    if(workspace.wincount == 0): return
+
+    let selScreen = selectedScreen()
+    const flag: cuint = CWX or CWY or CWWidth or CWHeight
+
+    var winVals = TXWindowChanges()
+
+    var
+        x = selScreen.xOffset
+        y = selScreen.yOffset
+        width = selScreen.width
+        height = selScreen.height - statusBarHeight
+
+    let tiledCount = workspace.tiledWindowCount-1
+    var secondaryHeight = height
+    if(tiledCount > 0): secondaryHeight = secondaryHeight.div(tiledCount).cint
+    var drawnWindows = 0
+    for i in 0..<workspace.wincount:
+        let window = workspace[i]
+        if(window.fullScreen):
+            discard XMoveResizeWindow(display,window.rawWindow,selScreen.xOffset,selScreen.yOffset,selScreen.width,selScreen.height)
+            return #We have a full screen application we dont need to tile shit
+        if(window.isTiled):
+            #All secondary windows are at the same x but only the window after the second tiled window is offset vertically
+            if(drawnWindows > 0):
+                x = width
+                if(drawnWindows > 1): y += secondaryHeight
+                height = secondaryHeight
+            elif(tiledCount > 1):
+                width = width.div(2)
+
+            winVals.x = x + borderSize
+            winVals.y = y + borderSize
+
+            winVals.width = width - borderSize * 2
+            winVals.height = height - borderSize * 2
+            #If right is main screen.Width - x - width gives right position, only do this if we have more than 1 window
+            if(rightMain and tiledCount > 1):
+                winVals.x = (selScreen.width - winVals.x - winVals.width) + selScreen.xOffset 
+
+            discard XConfigureWindow(display, window.rawWindow, flag, winVals.addr)
+            inc(drawnWindows)
+
+        else: discard XRaiseWindow(display,window.rawWindow)
+
+    selScreen.drawBar()
+
 proc moveWindowsHorz(right: bool = true) =
     if(selectedWorkspace().wincount() <= 1): return
     var workspace = selectedWorkspace()
@@ -251,10 +304,12 @@ proc assignToActive(win: TWindow) =
         var screen = screens[x]
         var workspace = screen.getActiveWorkspace()
 
-        for x in 0..<workspace.wincount:
-            if(workspace[x].rawWindow == win):
-                workspace.activeWindow = x
+        for y in 0..<workspace.wincount:
+            if(workspace[y].rawWindow == win):
+                workspace.activeWindow = y
+                selected = x
                 return
+
 
 proc focusScreen(right: bool = false) =
     ##Move cursor to screen and focus first window
@@ -370,6 +425,7 @@ proc loadScreens() =
         var screen = Screen()
         let size = line.findAll(sizeReg)
         let offset = line.findAll(offsetReg)
+        screen.activeWorkspace = 1
 
         if(size.len != 2 or offset.len != 2): quit "Cant find monitors"
 
@@ -395,7 +451,6 @@ proc loadScreens() =
                                                         LeaveWindowMask or
                                                         ButtonMotionMask)
         screens.add(screen)
-        echo fmt"Screen 0 is: {screen.width}X{screen.height}+{screen.xOffset}+{screen.yOffset}"
 
 
 
@@ -450,6 +505,10 @@ proc initFromConfig() =
             screen.drawMode = proc() = drawAlternatingSplit(false)
         of RightAlternating:
             screen.drawMode = proc() = drawAlternatingSplit(true)
+        of LeftMaster:
+            screen.drawMode = proc() = drawMainSplit(false)
+        of RightMaster:
+            screen.drawMode = proc()= drawMainSplit(true)
         of Vertical:
             screen.drawMode = drawVerticalTiled
         else: screen.drawMode = drawHorizontalTiled
@@ -514,10 +573,33 @@ proc setup() =
 
     addWidgetFunctions()
 
+
+
     screen = DefaultScreen(display)
     root = RootWindow(display, screen)
     discard XSetErrorHandler(errorHandler)
 
+
+    let supported = XInternAtom(display,"_NET_SUPPORTED",false)
+    let dataType = XInternAtom(display,"ATOM",false)
+    var atomsNames : array[7,TAtom]
+    atomsNames[0] = (XInternAtom(display,"_NET_ACTIVE_WINDOW",false))
+    atomsNames[1] = (XInternAtom(display,"_NET_WM_STATE",false))
+    atomsNames[2] = (XInternAtom(display,"_NET_WM_STATE_FULLSCREEN",false))
+    atomsNames[3] = (XInternAtom(display,"_NET_WM_WINDOW_TYPE",false))
+    atomsNames[4] = (XInternAtom(display,"_NET_WM_STATE_MAXIMIZED_HORZ",false))
+    atomsNames[5] = (XInternAtom(display,"_NET_WM_STATE_MAXIMIZED_VERT",false))
+    atomsNames[6] = (XInternAtom(display,"NET_SUPPORTING_WM_CHECK",false))
+
+
+    discard XChangeProperty(display,
+                            root,
+                            supported,
+                            dataType,
+                            32,
+                            PropModeReplace,
+                            cast[Pcuchar](atomsNames.addr),
+                            atomsNames.len.cint)
     initFromConfig()
 
     discard XSelectInput(display,
@@ -543,13 +625,12 @@ proc frameWindow(w: TWindow) =
 
 
     discard XSelectInput(display, w,EnterWindowMask or
-                                        LeaveWindowMask)
+                                    LeaveWindowMask or
+                                    PropertyChangeMask)
     discard XMapWindow(display, w)
     selectedScreen().drawMode()
 
 proc onMapRequest(e: var TXMapRequestEvent) =
-    for screen in screens:
-        if(e.window == cast[TWindow](screen.bar)): return
     if(not e.window.inCurrentSpace()): frameWindow(e.window)
 
 proc onWindowDestroy(e: TXDestroyWindowEvent) =
@@ -609,9 +690,9 @@ proc onButtonReleased(e: TXButtonEvent) =
     mouseState = Nothing
 
 proc onEnterEvent(e: TXCrossingEvent) =
-    mouseState = Nothing
-    assignToActive(e.window)
-    discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
+    if(mouseState == Nothing):
+        assignToActive(e.window)
+        discard XSetInputFocus(display, e.window, RevertToNone, CurrentTime)
 
 proc onMotion(e: TXMotionEvent) =
     if(selectedWorkspace().wincount > 0):
@@ -626,6 +707,12 @@ proc onMotion(e: TXMotionEvent) =
             discard XGetWindowAttributes(display,activeTWindow(),winAttr.addr)
             discard XResizeWindow(display,activeTWindow(),e.x - winAttr.x, e.y - winattr.y)
         of Nothing:discard
+
+proc onPropertyChanged(e : TXPropertyEvent)=
+    echo XGetAtomName(display,e.atom)
+    if(XGetAtomName(display,e.atom) == "_NET_WM_STATE"): discard execShellCmd("notify-send gotWmStateChange")
+    if(XGetAtomName(display,e.atom) == "_NET_WM_STATE_FULLSCREEN"): discard execShellCmd("notify-send FullScreen it")
+    discard
 
 proc run() =
     ##The main loop, it's main.
@@ -653,6 +740,8 @@ proc run() =
                 onEnterEvent(ev.xcrossing)
             of MotionNotify:
                 onMotion(ev.xmotion)
+            of PropertyNotify:
+                onPropertyChanged(ev.xproperty)
             else: discard
         if(epochTime() - lastDraw >= delay):
             barLoop()

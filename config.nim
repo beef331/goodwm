@@ -33,6 +33,8 @@ type
         #Probably wont have this one 
         LeftSpiral,
         Horizontal,
+        LeftMaster,
+        RightMaster,
         Vertical
 
     KeyConfig* = ref object
