@@ -153,7 +153,7 @@ proc drawVerticalTiled() =
         let window = workspace[i]
         if(window.isTiled):
             if(i > 0): y += height
-            discard XMoveResizeWindow(display, window.rawWindow, x, y, width, height)
+            discard XMoveResizeWindow(display, window.rawWindow, x + borderSize, y + borderSize, width - borderSize*2, height - borderSize*2)
 
     selScreen.drawBar()
 
@@ -589,7 +589,7 @@ proc setup() =
     atomsNames[3] = (XInternAtom(display,"_NET_WM_WINDOW_TYPE",false))
     atomsNames[4] = (XInternAtom(display,"_NET_WM_STATE_MAXIMIZED_HORZ",false))
     atomsNames[5] = (XInternAtom(display,"_NET_WM_STATE_MAXIMIZED_VERT",false))
-    atomsNames[6] = (XInternAtom(display,"NET_SUPPORTING_WM_CHECK",false))
+    atomsNames[6] = (XInternAtom(display,"_NET_SUPPORTING_WM_CHECK",false))
 
 
     discard XChangeProperty(display,
