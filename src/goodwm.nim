@@ -62,18 +62,16 @@ proc `[]`(w: Workspace, index: int): Window = w.windows[index]
 proc `[]`(s: var Screen, index: int): var Workspace = s.workspaces[index]
 
 
-let eventMask = SubstructureRedirectMask or
+let eventMask = StructureNotifyMask or
+                SubstructureRedirectMask or
                 SubstructureNotifyMask or
-                StructureNotifyMask or
                 ButtonPressMask or
-                ButtonReleaseMask or
-                KeyPressMask or
-                KeyReleaseMask or
+                PointerMotionMask or
                 EnterWindowMask or
                 LeaveWindowMask or
-                PointerMotionMask or
-                PropertyChangeMask
-
+                PropertyChangeMask or
+                KeyPressMask or
+                KeyReleaseMask
 
 proc selectedScreen: var Screen = screens[selected]
 
@@ -624,9 +622,11 @@ proc frameWindow(w: TWindow) =
     else: workspace.windows.add(Window(rawWindow: w))
 
 
-    discard XSelectInput(display, w,EnterWindowMask or
-                                    LeaveWindowMask or
-                                    PropertyChangeMask)
+    discard XSelectInput(display, w,StructureNotifyMask or
+                                    PropertyChangeMask or
+                                    ResizeRedirectMask or
+                                    EnterWindowMask or
+                                    FocusChangeMask)
     discard XMapWindow(display, w)
     selectedScreen().drawMode()
 
@@ -722,27 +722,30 @@ proc run() =
     var lastDraw = epochTime()
     var delay = 0.1
     while running:
-        while(XCheckMaskEvent(display, eventMask, ev.addr)):
-            case (ev.theType):
-            of DestroyNotify:
-                onWindowDestroy(ev.xdestroywindow)
-            of MapRequest:
-                onMapRequest(ev.xmaprequest)
-            of KeyPress:
-                onKeyPress(ev.xkey)
-            of KeyRelease:
-                onKeyRelease(ev.xkey)
-            of ButtonPress:
-                onButtonPressed(ev.xbutton)
-            of ButtonRelease:
-                onButtonReleased(ev.xbutton)
-            of EnterNotify:
-                onEnterEvent(ev.xcrossing)
-            of MotionNotify:
-                onMotion(ev.xmotion)
-            of PropertyNotify:
-                onPropertyChanged(ev.xproperty)
-            else: discard
+        if(XPending(display)):
+            while(XNextEvent(display,ev.addr) == 0):
+                case (ev.theType):
+                of DestroyNotify:
+                    onWindowDestroy(ev.xdestroywindow)
+                of MapRequest:
+                    onMapRequest(ev.xmaprequest)
+                of KeyPress:
+                    onKeyPress(ev.xkey)
+                of KeyRelease:
+                    onKeyRelease(ev.xkey)
+                of ButtonPress:
+                    onButtonPressed(ev.xbutton)
+                of ButtonRelease:
+                    onButtonReleased(ev.xbutton)
+                of EnterNotify:
+                    onEnterEvent(ev.xcrossing)
+                of MotionNotify:
+                    onMotion(ev.xmotion)
+                of PropertyNotify:
+                    onPropertyChanged(ev.xproperty)
+                of ClientMessage:
+                    echo "Message Got" & $XGetAtomName(display, ev.xclient.message_type)
+                else: discard
         if(epochTime() - lastDraw >= delay):
             barLoop()
             lastDraw = epochTime()
