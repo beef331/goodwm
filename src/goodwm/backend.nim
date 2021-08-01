@@ -1,5 +1,5 @@
 import x11/[x, xinerama, xlib]
-import std/[tables, osproc]
+import std/[tables, osproc, options]
 import bumpy, vmath
 import inputs
 
@@ -38,6 +38,7 @@ type
     root*: Window
     screen*: cint
     screens: seq[Screen]
+    activeWindow: Option[Window]
     shortcuts: Table[Key, Shortcut]
 
 proc getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
@@ -57,7 +58,10 @@ proc layoutActive(desktop: var Desktop) =
 
       for i, w in scr.getActiveWorkspace:
         if not w.isFloating:
-          discard XMoveResizeWindow(desktop.display, w.window, (windowWidth * i).cint, scr.bounds.y.cint, windowWidth.cuint, windowHeight)
+          scr.getActiveWorkspace[i].bounds = rect((windowWidth * i).float, scr.bounds.y,
+              windowWidth.float, windowHeight.float)
+          discard XMoveResizeWindow(desktop.display, w.window, (windowWidth * i).cint,
+              scr.bounds.y.cint, windowWidth.cuint, windowHeight)
 
 func add*(s: var Screen, window: ManagedWindow) = s.getActiveWorkspace.add window
 
@@ -69,14 +73,20 @@ func del*(d: var Desktop, window: Window) =
           if ws[i].window == window:
             ws.delete(i)
             break removeWindow
-  debugecho d.screens[0].getActiveWorkspace
   d.layoutActive()
+
+proc killActiveWindow(d: var Desktop) =
+  echo d.activeWindow.isSome
+  if d.activeWindow.isSome:
+    discard XDestroyWindow(d.display, d.activeWindow.get)
+    d.activeWindow = none(Window)
 
 func addWindow*(d: var Desktop, window: Window, x, y, width, height: int, isFloating: bool) =
   for scr in d.screens.mitems:
     if scr.isActive:
       let bounds = rect(x.float, y.float, width.float, height.float)
-      scr.getActiveWorkspace.add ManagedWindow(isFloating: isFloating, window: window, bounds: bounds)
+      scr.getActiveWorkspace.add ManagedWindow(isFloating: isFloating, window: window,
+          bounds: bounds)
       d.layoutActive
       return
 
@@ -93,17 +103,23 @@ proc getScreens*(desktop: var Desktop) =
   desktop.screens[0].isActive = true
 
   #Temporary injection site
-  desktop.shortcuts[Key(code: 33, modi: Mod4Mask)] = Shortcut(kind: command, cmd: "rofi -show drun")
-
-func mouseMotion*(d: var Desktop, x, y: int) =
-  for scr in d.screens.mitems:
-    scr.isActive = scr.bounds.overlaps vec2(x.float32, y.float32)
+  desktop.shortcuts[Key(code: 33, modi: Mod1Mask)] = Shortcut(kind: command, cmd: "rofi -show drun")
+  desktop.shortcuts[Key(code: 36, modi: Mod1Mask)] = Shortcut(kind: command, cmd: "kitty")
+  desktop.shortcuts[Key(code: 24, modi: Mod1Mask)] = Shortcut(kind: function,
+      event: killActiveWindow)
 
 func activeScreen*(d: var Desktop): var Screen =
   for x in d.screens.mitems:
     if x.isActive:
       return x
   result = d.screens[0]
+
+func mouseMotion*(d: var Desktop, x, y: int) =
+  let pos = vec2(x.float32, y.float32)
+  for scr in d.screens.mitems:
+    scr.isActive = scr.bounds.overlaps pos
+
+func mouseEnter*(d: var Desktop, w: Window) = d.activeWindow = some(w)
 
 proc onKey*(d: var Desktop, key: Key) =
   if key in d.shortcuts:

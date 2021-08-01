@@ -1,4 +1,4 @@
-import x11/[xlib, x, xutil,xatom]
+import x11/[xlib, x, xutil, xatom]
 import std/os
 import goodwm/[backend, inputs]
 
@@ -13,14 +13,12 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
     size = XAllocSizeHints()
     returnMask: int
   discard XGetWMNormalHints(desktop.display, e.window, size, addr returnMask)
-  let isFloating = size.minWidth == size.maxWidth and size.maxHeight == size.minHeight and size.min_width > 0 and size.min_height > 0
+  let isFloating = size.minWidth == size.maxWidth and size.maxHeight == size.minHeight and
+      size.min_width > 0 and size.min_height > 0
   desktop.addWindow(e.window, size.x, size.y, size.minWidth, size.minHeight, isFloating)
-  echo size[]
-  discard XSelectInput(desktop.display, e.window, StructureNotifyMask or
-                                    PropertyChangeMask or
-                                    ResizeRedirectMask or
-                                    EnterWindowMask or
-                                    FocusChangeMask)
+  discard XSelectInput(desktop.display, e.window, EnterWindowMask or
+                                    LeaveWindowMask or
+                                    PropertyChangeMask)
   discard XMapWindow(desktop.display, e.window)
   discard XFree(size)
 
@@ -37,16 +35,15 @@ proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) = discard
 
 proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) = discard
 
-proc onEnterEvent(desktop: var Desktop, e: XCrossingEvent) =
-  desktop.mouseMotion(e.x, e.y)
+proc onEnter(desktop: var Desktop, e: XCrossingEvent) = desktop.mouseEnter(e.window)
 
 proc onMotion(desktop: var Desktop, e: XMotionEvent) =
-  desktop.mouseMotion(e.x, e.y)
+  desktop.mouseEnter(e.window)
 
-proc onPropertyChanged(desktop: var Desktop, e: XPropertyEvent)= discard
+proc onPropertyChanged(desktop: var Desktop, e: XPropertyEvent) = discard
 
 proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint {.cdecl.} =
-    echo error.theType
+  echo error.theType
 
 proc setup(): Desktop =
   result.display = XOpenDisplay(nil)
@@ -68,13 +65,37 @@ proc setup(): Desktop =
                     KeyPressMask or
                     KeyReleaseMask
 
+  result.getScreens()
+
   for key in result.keys:
     discard XGrabKey(result.display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
 
   discard XSelectInput(result.display, result.root, eventMask)
-  discard XSync(result.display, XTrue)
 
-  result.getScreens()
+  discard XGrabPointer(
+    result.display,
+    result.root,
+    XFalse,
+    EnterWindowMask or LeaveWindowMask or PointerMotionMask,
+    GrabModeAsync,
+    GrabModeAsync,
+    None,
+    None,
+    CurrentTime)
+
+  discard XGrabButton(
+    result.display,
+    AnyButton,
+    AnyModifier,
+    result.root,
+    XTrue,
+    ButtonMotionMask or ButtonPressMask or ButtonReleaseMask,
+    GrabModeAsync,
+    GrabModeAsync,
+    None,
+    None)
+
+  discard XSync(result.display, XTrue)
 
 proc run() =
   ##The main loop, it's main.
@@ -99,8 +120,8 @@ proc run() =
           desktop.onButtonPressed(ev.xbutton)
         of ButtonRelease:
           desktop.onButtonReleased(ev.xbutton)
-        of EnterNotify:
-          desktop.onEnterEvent(ev.xcrossing)
+        of EnterNotify, LeaveNotify:
+          desktop.onEnter(ev.xcrossing)
         of MotionNotify:
           desktop.onMotion(ev.xmotion)
         of PropertyNotify:
