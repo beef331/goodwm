@@ -1,30 +1,35 @@
 import x11/[xlib, x, xutil,xatom]
 import std/os
-import goodwm/backend
+import goodwm/[backend, inputs]
+
+const
+  XTrue = true.XBool
+  XFalse = false.XBool
+
+
 
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   var
     size = XAllocSizeHints()
     returnMask: int
   discard XGetWMNormalHints(desktop.display, e.window, size, addr returnMask)
-  let isFloating = size.minWidth == size.maxWidth and size.maxHeight == size.minHeight
+  let isFloating = size.minWidth == size.maxWidth and size.maxHeight == size.minHeight and size.min_width > 0 and size.min_height > 0
   desktop.addWindow(e.window, size.x, size.y, size.minWidth, size.minHeight, isFloating)
+  echo size[]
   discard XSelectInput(desktop.display, e.window, StructureNotifyMask or
                                     PropertyChangeMask or
                                     ResizeRedirectMask or
                                     EnterWindowMask or
                                     FocusChangeMask)
   discard XMapWindow(desktop.display, e.window)
+  discard XFree(size)
 
-proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = discard
+proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
 
-proc onWindowCreate(desktop: var Desktop, e: XCreateWindowEvent) = 
-  desktop.del(e.window)
-  
+proc onWindowCreate(desktop: var Desktop, e: XCreateWindowEvent) = discard
 
 proc onKeyPress(desktop: var Desktop, e: XKeyEvent) =
-  if e.keycode == 33:
-    discard execShellCmd("rofi -show drun")
+  desktop.onKey(Key(code: e.keycode, modi: e.state))
 
 proc onKeyRelease(desktop: var Desktop, e: XKeyEvent) = discard
 
@@ -51,22 +56,6 @@ proc setup(): Desktop =
 
   discard XSetErrorHandler(errorHandler)
 
-  discard XGrabButton(result.display, 1, Mod4Mask, result.root, true.XBool,
-                                                    ButtonMotionMask or
-                                                    ButtonPressMask or
-                                                    ButtonReleaseMask,
-                                                    GrabModeAsync,
-                                                    GrabModeAsync,
-                                                    None,
-                                                    None)
-  discard XGrabButton(result.display, 3, Mod4Mask, result.root, true.XBool,
-                                                    ButtonMotionMask or
-                                                    ButtonPressMask or
-                                                    ButtonReleaseMask,
-                                                    GrabModeAsync,
-                                                    GrabModeAsync,
-                                                    None,
-                                                    None)
 
   const eventMask = StructureNotifyMask or
                     SubstructureRedirectMask or
@@ -79,8 +68,11 @@ proc setup(): Desktop =
                     KeyPressMask or
                     KeyReleaseMask
 
+  for key in result.keys:
+    discard XGrabKey(result.display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
+
   discard XSelectInput(result.display, result.root, eventMask)
-  discard XSync(result.display, true.XBool)
+  discard XSync(result.display, XTrue)
 
   result.getScreens()
 
