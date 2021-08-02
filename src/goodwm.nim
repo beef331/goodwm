@@ -6,8 +6,6 @@ const
   XTrue = true.XBool
   XFalse = false.XBool
 
-
-
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   var
     size = XAllocSizeHints()
@@ -26,13 +24,16 @@ proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del
 proc onWindowCreate(desktop: var Desktop, e: XCreateWindowEvent) = discard
 
 proc onKeyPress(desktop: var Desktop, e: XKeyEvent) =
-  desktop.onKey(Key(code: e.keycode, modi: e.state))
+  desktop.onKey(initKey(e.keycode, e.state))
 
 proc onKeyRelease(desktop: var Desktop, e: XKeyEvent) = discard
 
-proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) = discard
+proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) =
+  echo e
 
-proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) = discard
+proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) =
+  discard
+
 
 proc onEnter(desktop: var Desktop, e: XCrossingEvent) = desktop.mouseEnter(e.window)
 
@@ -51,21 +52,29 @@ proc setup(): Desktop =
 
   discard XSetErrorHandler(errorHandler)
 
-  const eventMask = StructureNotifyMask or
-                    SubstructureRedirectMask or
-                    SubstructureNotifyMask or
-                    ButtonPressMask or
-                    PointerMotionMask or
-                    EnterWindowMask or
-                    LeaveWindowMask or
-                    PropertyChangeMask or
-                    KeyPressMask or
-                    KeyReleaseMask
+  const
+    eventMask = StructureNotifyMask or
+                SubstructureRedirectMask or
+                SubstructureNotifyMask or
+                ButtonPressMask or
+                PointerMotionMask or
+                EnterWindowMask or
+                LeaveWindowMask or
+                PropertyChangeMask or
+                KeyPressMask or
+                KeyReleaseMask
+    mouseMask = ButtonPressMask or
+                ButtonReleaseMask or
+                ButtonMotionMask
 
   result.getScreens()
 
   for key in result.keys:
     discard XGrabKey(display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
+
+  for btn in result.buttons:
+    discard XGrabButton(display, btn.btn.cuint, btn.modi, result.root, XFalse, mouseMask,
+        GrabModeASync, GrabModeAsync, None, None)
 
   discard XSelectInput(display, result.root, eventMask)
 

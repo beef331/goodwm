@@ -6,6 +6,7 @@ import inputs
 
 type
   KeyEvent* = proc(d: var Desktop){.nimcall.}
+  MouseEvent* = proc(d: var Desktop, pos: IVec2)
 
   ScreenLayout = enum
     verticalDown, verticalUp, horizontalRight, horizontalLeft
@@ -43,6 +44,7 @@ type
     screens: seq[Screen]
     activeWindow: Option[Window]
     shortcuts: Table[Key, Shortcut]
+    mouseShortcuts: Table[Button, MouseEvent]
 
 
 func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
@@ -79,9 +81,9 @@ func tiledWindows(s: Workspace): int =
     if not w.isFloating:
       inc result
 
-func layoutActive(desktop: var Desktop) =
+func layoutActive(d: var Desktop) =
   ## Calls the coresponding layout logic required
-  for scr in desktop.screens.mitems:
+  for scr in d.screens.mitems:
     let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
     if tiledWindowCount > 0:
       let
@@ -91,7 +93,7 @@ func layoutActive(desktop: var Desktop) =
         if not w.isFloating:
           scr.getActiveWorkspace.windows[i].bounds = rect((windowWidth * i).float + scr.bounds.x,
               scr.bounds.y, windowWidth.float, windowHeight.float)
-          discard XMoveResizeWindow(desktop.display, w.window, (windowWidth * i).cint,
+          discard XMoveResizeWindow(d.display, w.window, (windowWidth * i).cint,
               scr.bounds.y.cint, windowWidth.cuint, windowHeight)
 
 func add*(s: var Screen, window: ManagedWindow) = s.getActiveWorkspace.windows.add window
@@ -147,8 +149,15 @@ proc onKey*(d: var Desktop, key: Key) =
       if key.event != nil:
         key.event(d)
 
+proc onButton*(d: var Desktop, evt: XButtonEvent) =
+  discard
+
 iterator keys*(d: Desktop): Key =
   for x in d.shortcuts.keys:
+    yield x
+
+iterator buttons*(d: Desktop): Button =
+  for x in d.mouseShortcuts.keys:
     yield x
 
 func killActiveWindow(d: var Desktop) =
@@ -167,63 +176,70 @@ func moveCursorToActive(d: var Desktop) =
 
     discard XWarpPointer(d.display, None, wnd.window, 0, 0, 0, 0, x, y)
 
-func moveUp(desktop: var Desktop) =
+func moveUp(d: var Desktop) =
   ## Moves active window up the stack of tiled windows
-  if desktop.activeWindow.isSome:
-    var workspace {.byaddr.} = desktop.getActiveWorkspace
+  if d.activeWindow.isSome:
+    var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
         if not workspace.windows[j].isFloating:
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
-          desktop.layoutActive
-          desktop.activeWindow = some(workspace.windows[j].window)
-          desktop.moveCursorToActive
+          d.layoutActive
+          d.activeWindow = some(workspace.windows[j].window)
+          d.moveCursorToActive
           break
 
-func moveDown(desktop: var Desktop) =
+func moveDown(d: var Desktop) =
   ## Moves active window down the stack of tiled windows
-  if desktop.activeWindow.isSome:
-    var workspace {.byaddr.} = desktop.getActiveWorkspace
+  if d.activeWindow.isSome:
+    var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
         if not workspace.windows[j].isFloating:
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
-          desktop.layoutActive
-          desktop.activeWindow = some(workspace.windows[j].window)
-          desktop.moveCursorToActive
+          d.layoutActive
+          d.activeWindow = some(workspace.windows[j].window)
+          d.moveCursorToActive
           break
 
 
-func focusUp(desktop: var Desktop) =
+func focusUp(d: var Desktop) =
   ## Focuses the window above the active one in the active screens stack
-  if desktop.activeWindow.isSome:
-    var workspace {.byaddr.} = desktop.getActiveWorkspace
+  if d.activeWindow.isSome:
+    var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
         if not workspace.windows[j].isFloating:
           workspace.active = j
-          desktop.activeWindow = some(workspace.windows[j].window)
-          desktop.moveCursorToActive
+          d.activeWindow = some(workspace.windows[j].window)
+          d.moveCursorToActive
           break
 
-func focusDown(desktop: var Desktop) =
+func focusDown(d: var Desktop) =
   ## Focuses the window below the active one in the active screens stack
-  if desktop.activeWindow.isSome:
-    var workspace {.byaddr.} = desktop.getActiveWorkspace
+  if d.activeWindow.isSome:
+    var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
         if not workspace.windows[j].isFloating:
           workspace.active = j
-          desktop.activeWindow = some(workspace.windows[j].window)
-          desktop.moveCursorToActive
+          d.activeWindow = some(workspace.windows[j].window)
+          d.moveCursorToActive
           break
 
+func toggleFloating(d: var Desktop) =
+  d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
+  d.layoutActive
 
-func getScreens*(desktop: var Desktop) =
-  desktop.screens = @[]
-  let dis = desktop.display
+func moveFloating(d: var Desktop, pos: Ivec2) =
+  discard
+
+
+func getScreens*(d: var Desktop) =
+  d.screens = @[]
+  let dis = d.display
   var
     count: cint
     displays = cast[ptr UncheckedArray[XineramaScreenInfo]](XineramaQueryScreens(dis, count.addr))
@@ -231,13 +247,16 @@ func getScreens*(desktop: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    desktop.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1))
-  desktop.screens[0].isActive = true
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1))
+  d.screens[0].isActive = true
 
   #Temporary injection site
-  desktop.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
-  desktop.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
-  desktop.shortcuts[initKey(dis, "Up", Alt)] = initShortcut(focusUp)
-  desktop.shortcuts[initKey(dis, "Down", Alt)] = initShortcut(focusDown)
-  desktop.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
-  desktop.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
+  d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
+  d.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
+  d.shortcuts[initKey(dis, "f", Alt)] = initShortcut(toggleFloating)
+  d.shortcuts[initKey(dis, "Up", Alt)] = initShortcut(focusUp)
+  d.shortcuts[initKey(dis, "Down", Alt)] = initShortcut(focusDown)
+  d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
+  d.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
+
+  d.mouseShortcuts[initButton(1, Alt)] = moveFloating
