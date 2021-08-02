@@ -18,4 +18,4 @@ requires "bumpy"
 
 task demo, "Makes and tests the binary":
   exec "nimble build"
-  exec "Xephyr :5 -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"
+  exec "Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"

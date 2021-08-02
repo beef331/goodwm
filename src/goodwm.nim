@@ -17,8 +17,7 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
       size.min_width > 0 and size.min_height > 0
   desktop.addWindow(e.window, size.x, size.y, size.minWidth, size.minHeight, isFloating)
   discard XSelectInput(desktop.display, e.window, EnterWindowMask or
-                                    LeaveWindowMask or
-                                    PointerMotionMask)
+                                    LeaveWindowMask)
   discard XMapWindow(desktop.display, e.window)
   discard XFree(size)
 
@@ -45,9 +44,10 @@ proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint {.cdecl.} =
   echo error.theType
 
 proc setup(): Desktop =
-  result.display = XOpenDisplay(nil)
-  result.screen = DefaultScreen(result.display)
-  result.root = RootWindow(result.display, result.screen)
+  template display: PDisplay = result.display
+  display = XOpenDisplay(nil)
+  result.screen = DefaultScreen(display)
+  result.root = RootWindow(display, result.screen)
 
   discard XSetErrorHandler(errorHandler)
 
@@ -65,11 +65,11 @@ proc setup(): Desktop =
   result.getScreens()
 
   for key in result.keys:
-    discard XGrabKey(result.display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
+    discard XGrabKey(display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
 
-  discard XSelectInput(result.display, result.root, eventMask)
+  discard XSelectInput(display, result.root, eventMask)
 
-  discard XSync(result.display, XTrue)
+  discard XSync(display, XTrue)
 
 proc run() =
   ##The main loop, it's main.
