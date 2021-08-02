@@ -41,14 +41,19 @@ type
     activeWindow: Option[Window]
     shortcuts: Table[Key, Shortcut]
 
-proc getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
 
-proc tiledWindows(s: Workspace): int =
+func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
+func initShortcut(cmd: string): Shortcut = Shortcut(kind: command, cmd: cmd)
+
+
+func getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
+
+func tiledWindows(s: Workspace): int =
   for w in s:
     if not w.isFloating:
       inc result
 
-proc layoutActive(desktop: var Desktop) =
+func layoutActive(desktop: var Desktop) =
   for scr in desktop.screens.mitems:
     let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
     if tiledWindowCount > 0:
@@ -114,13 +119,12 @@ iterator keys*(d: Desktop): Key =
   for x in d.shortcuts.keys:
     yield x
 
-proc killActiveWindow(d: var Desktop) =
+func killActiveWindow(d: var Desktop) =
   if d.activeWindow.isSome:
     discard XDestroyWindow(d.display, d.activeWindow.get)
     d.activeWindow = none(Window)
 
-proc moveUp(desktop: var Desktop) =
-  echo "move window"
+func moveUp(desktop: var Desktop) =
   if desktop.activeWindow.isSome:
     var
       i = 0
@@ -136,11 +140,12 @@ proc moveUp(desktop: var Desktop) =
         inc i
 
 
-proc getScreens*(desktop: var Desktop) =
+func getScreens*(desktop: var Desktop) =
   desktop.screens = @[]
+  let dis = desktop.display
   var
     count: cint
-    displays = cast[ptr UncheckedArray[XineramaScreenInfo]](XineramaQueryScreens(desktop.display, count.addr))
+    displays = cast[ptr UncheckedArray[XineramaScreenInfo]](XineramaQueryScreens(dis, count.addr))
   for x in 0..<count:
     let
       screen = displays[x]
@@ -149,9 +154,8 @@ proc getScreens*(desktop: var Desktop) =
   desktop.screens[0].isActive = true
 
   #Temporary injection site
-  desktop.shortcuts[Key(code: 33, modi: Mod1Mask)] = Shortcut(kind: command, cmd: "rofi -show drun")
-  desktop.shortcuts[Key(code: 36, modi: Mod1Mask)] = Shortcut(kind: command, cmd: "kitty")
-  desktop.shortcuts[Key(code: 24, modi: Mod1Mask)] = Shortcut(kind: function,
-      event: killActiveWindow)
-  desktop.shortcuts[Key(code: 111, modi: Mod1Mask or ShiftMask)] = Shortcut(kind: function,
-      event: moveUp)
+  desktop.shortcuts[initKey(dis, "p", Alt)] = Shortcut(kind: command,
+      cmd: "rofi -show drun")
+  desktop.shortcuts[Key(code: 36, modi: Alt)] = initShortcut("kitty")
+  desktop.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
+  desktop.shortcuts[Key(code: 111, modi: Alt or Shift)] = initShortcut(moveUp)
