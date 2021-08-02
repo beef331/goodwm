@@ -18,7 +18,7 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   desktop.addWindow(e.window, size.x, size.y, size.minWidth, size.minHeight, isFloating)
   discard XSelectInput(desktop.display, e.window, EnterWindowMask or
                                     LeaveWindowMask or
-                                    PropertyChangeMask)
+                                    PointerMotionMask)
   discard XMapWindow(desktop.display, e.window)
   discard XFree(size)
 
@@ -37,8 +37,7 @@ proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) = discard
 
 proc onEnter(desktop: var Desktop, e: XCrossingEvent) = desktop.mouseEnter(e.window)
 
-proc onMotion(desktop: var Desktop, e: XMotionEvent) =
-  desktop.mouseEnter(e.window)
+proc onMotion(desktop: var Desktop, e: XMotionEvent) = desktop.mouseMotion(e.x, e.y, e.window)
 
 proc onPropertyChanged(desktop: var Desktop, e: XPropertyEvent) = discard
 
