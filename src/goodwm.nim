@@ -49,9 +49,7 @@ proc setup(): Desktop =
   result.screen = DefaultScreen(result.display)
   result.root = RootWindow(result.display, result.screen)
 
-
   discard XSetErrorHandler(errorHandler)
-
 
   const eventMask = StructureNotifyMask or
                     SubstructureRedirectMask or
@@ -70,29 +68,6 @@ proc setup(): Desktop =
     discard XGrabKey(result.display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
 
   discard XSelectInput(result.display, result.root, eventMask)
-
-  discard XGrabPointer(
-    result.display,
-    result.root,
-    XFalse,
-    EnterWindowMask or LeaveWindowMask or PointerMotionMask,
-    GrabModeAsync,
-    GrabModeAsync,
-    None,
-    None,
-    CurrentTime)
-
-  discard XGrabButton(
-    result.display,
-    AnyButton,
-    AnyModifier,
-    result.root,
-    XTrue,
-    ButtonMotionMask or ButtonPressMask or ButtonReleaseMask,
-    GrabModeAsync,
-    GrabModeAsync,
-    None,
-    None)
 
   discard XSync(result.display, XTrue)
 

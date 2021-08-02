@@ -1,5 +1,5 @@
 import x11/[x, xinerama, xlib]
-import std/[tables, osproc, options]
+import std/[tables, osproc, options, strutils]
 import bumpy, vmath
 import inputs
 
@@ -30,6 +30,7 @@ type
     case kind: ShortcutKind
     of command:
       cmd: string
+      args: seq[string]
     of function:
       event: KeyEvent
 
@@ -43,7 +44,11 @@ type
 
 
 func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
-func initShortcut(cmd: string): Shortcut = Shortcut(kind: command, cmd: cmd)
+func initShortcut(cmd: string): Shortcut =
+  var args = cmd.split(" ")
+  let cmd = args[0]
+  args = args[1..^1]
+  Shortcut(kind: command, cmd: cmd, args: args)
 
 
 func getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
@@ -97,7 +102,7 @@ func getActiveScreen*(d: var Desktop): var Screen =
 func mouseEnter*(d: var Desktop, w: Window) =
   if w != d.root:
     d.activeWindow = some(w)
-    discard XSetInputFocus(d.display, w, RevertToParent, CurrentTime)
+  discard XSetInputFocus(d.display, w, RevertToParent, CurrentTime)
 
 func mouseMotion*(d: var Desktop, x, y: int, w: Window) =
   d.mouseEnter(w)
@@ -110,7 +115,7 @@ proc onKey*(d: var Desktop, key: Key) =
     let key = d.shortcuts[key]
     case key.kind
     of command:
-      discard execCmd(key.cmd)
+      discard startProcess(key.cmd, args = key.args, options = {poUsePath})
     of function:
       if key.event != nil:
         key.event(d)
@@ -154,8 +159,6 @@ func getScreens*(desktop: var Desktop) =
   desktop.screens[0].isActive = true
 
   #Temporary injection site
-  desktop.shortcuts[initKey(dis, "p", Alt)] = Shortcut(kind: command,
-      cmd: "rofi -show drun")
-  desktop.shortcuts[Key(code: 36, modi: Alt)] = initShortcut("kitty")
+  desktop.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
   desktop.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
-  desktop.shortcuts[Key(code: 111, modi: Alt or Shift)] = initShortcut(moveUp)
+  desktop.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
