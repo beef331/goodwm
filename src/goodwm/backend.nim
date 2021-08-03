@@ -216,6 +216,11 @@ func focusDown(d: var Desktop) =
 
 func toggleFloating(d: var Desktop) =
   d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
+  let w = d.getActiveWindow.window
+  if d.getActiveWindow.isFloating:
+    discard XRaiseWindow(d.display, w)
+  else:
+    discard XLowerWindow(d.display, w)
   d.layoutActive
 
 func moveFloating(d: var Desktop, pos: Ivec2) =
