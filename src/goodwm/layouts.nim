@@ -4,8 +4,26 @@ import std/options
 type
   ScreenLayout* = enum
     verticalDown, verticalUp, horizontalRight, horizontalLeft, #alternatingRight, alternatingLeft
+
+  StatusBarPos* = enum
+    sbpTop, sbpBot, sbpLeft, sbpRight
+
   LayoutIter* = ref object of Continuation
     rect: Option[Rect]
+
+
+func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, size: int): Rect =
+  result = rect
+  case barPos:
+  of sbpTop:
+    result.y += size.float
+  of sbpBot:
+    result.h -= size.float
+  of sbpLeft:
+    result.x += size.float
+  of sbpRight:
+    result.w -= size.float
+
 
 proc getBounds*(c: LayoutIter): Rect =
   block:

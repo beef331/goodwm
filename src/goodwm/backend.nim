@@ -11,9 +11,12 @@ type
     isFloating: bool
     bounds: Rect
     window: Window
+
   Workspace = object
     active: int
     windows: seq[ManagedWindow]
+
+
 
   Screen* = object
     isActive: bool
@@ -21,6 +24,8 @@ type
     padding: int
     activeWorkspace: int
     layout: ScreenLayout
+    barSize: int
+    barPos: StatusBarPos
     workSpaces: seq[Workspace]
 
   ShortcutKind = enum
@@ -88,7 +93,9 @@ func layoutActive(d: var Desktop) =
     let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
     if tiledWindowCount > 0:
       {.noSideEffect.}: # I'm a liar and a scoundrel
-        let layout = getLayout(d.getActiveScreen.bounds, tiledWindowCount, d.getActiveScreen.layout)
+        let
+          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize)
+          layout = getLayout(freeSpace, tiledWindowCount, scr.layout)
         for i, w in scr.getActiveWorkspace.windows:
           if not w.isFloating:
             let bounds = layout.getBounds()
@@ -250,7 +257,7 @@ func getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight)
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight, barSize: 50)
   d.screens[0].isActive = true
   #Temporary injection site
   d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
