@@ -15,6 +15,7 @@ requires "nim >= 1.1.1"
 requires "x11"
 requires "vmath"
 requires "bumpy"
+requires "https://github.com/disruptek/cps"
 
 task demo, "Makes and tests the binary":
   exec "nimble build"

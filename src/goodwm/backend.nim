@@ -1,14 +1,12 @@
 import x11/[x, xinerama, xlib]
 import std/[tables, osproc, options, strutils, decls]
 import bumpy, vmath
-import inputs
+import inputs, layouts
 
 type
   KeyEvent* = proc(d: var Desktop){.nimcall.}
   ButtonEvent* = proc(d: var Desktop, isReleased: bool)
 
-  ScreenLayout = enum
-    verticalDown, verticalUp, horizontalRight, horizontalLeft
   ManagedWindow = object
     isFloating: bool
     bounds: Rect
@@ -89,17 +87,14 @@ func layoutActive(d: var Desktop) =
   for scr in d.screens.mitems:
     let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
     if tiledWindowCount > 0:
-      let
-        windowWidth = (scr.bounds.w.int div tiledWindowCount)
-        windowHeight = scr.bounds.h.cuint
-      var tiled = 0
-      for w in scr.getActiveWorkspace.windows.mitems:
-        if not w.isFloating:
-          scr.getActiveWorkspace.windows[tiled].bounds = rect((windowWidth * tiled).float +
-              scr.bounds.x, scr.bounds.y, windowWidth.float, windowHeight.float)
-          discard XMoveResizeWindow(d.display, w.window, (windowWidth * tiled).cint,
-              scr.bounds.y.cint, windowWidth.cuint, windowHeight)
-          inc tiled
+      {.noSideEffect.}: # I'm a liar and a scoundrel
+        let layout = getLayout(d.getActiveScreen.bounds, tiledWindowCount, d.getActiveScreen.layout)
+        for i, w in scr.getActiveWorkspace.windows:
+          if not w.isFloating:
+            let bounds = layout()
+            scr.getActiveWorkspace.windows[i].bounds = bounds
+            discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
+                bounds.w.cuint, bounds.h.cuint)
 
 func add*(s: var Screen, window: ManagedWindow) = s.getActiveWorkspace.windows.add window
 
@@ -255,9 +250,8 @@ func getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1))
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight)
   d.screens[0].isActive = true
-
   #Temporary injection site
   d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
   d.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
