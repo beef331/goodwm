@@ -28,20 +28,15 @@ proc onKeyPress(desktop: var Desktop, e: XKeyEvent) =
 
 proc onKeyRelease(desktop: var Desktop, e: XKeyEvent) = discard
 
-proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) = discard
+proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) =
+  desktop.onButton(initButton(e.button, e.state), false)
 
-proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) = discard
+proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) =
+  desktop.onButton(initButton(e.button, e.state), true)
 
 proc onEnter(desktop: var Desktop, e: XCrossingEvent) = desktop.mouseEnter(e.window)
 
-proc onMotion(desktop: var Desktop, e: XMotionEvent) =
-  let
-    modi = e.state and 255
-    btn = (e.state shr 8) and 255
-  if btn > 0:
-    desktop.onButton(initButton(btn, modi), e.x, e.y)
-  else:
-    desktop.mouseMotion(e.x, e.y, e.window)
+proc onMotion(desktop: var Desktop, e: XMotionEvent) = desktop.mouseMotion(e.x, e.y, e.window)
 
 proc onPropertyChanged(desktop: var Desktop, e: XPropertyEvent) = discard
 
@@ -67,7 +62,7 @@ proc setup(): Desktop =
                 PropertyChangeMask or
                 KeyPressMask or
                 KeyReleaseMask
-    mouseMask = ButtonMotionMask
+    mouseMask = ButtonMotionMask or ButtonPressMask or ButtonReleaseMask
 
   result.getScreens()
 

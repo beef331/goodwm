@@ -5,7 +5,7 @@ import inputs
 
 type
   KeyEvent* = proc(d: var Desktop){.nimcall.}
-  MouseEvent* = proc(d: var Desktop, pos: IVec2)
+  ButtonEvent* = proc(d: var Desktop, isReleased: bool)
 
   ScreenLayout = enum
     verticalDown, verticalUp, horizontalRight, horizontalLeft
@@ -47,7 +47,7 @@ type
     activeWindow: Option[Window]
     shortcuts: Table[Key, Shortcut]
     mouseState: MouseInput
-    mouseShortcuts: Table[Button, MouseEvent] # Maybe seperate to press/motion/release
+    mouseEvent: Table[Button, ButtonEvent]
 
 
 func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
@@ -92,12 +92,14 @@ func layoutActive(d: var Desktop) =
       let
         windowWidth = (scr.bounds.w.int div tiledWindowCount)
         windowHeight = scr.bounds.h.cuint
-      for i, w in scr.getActiveWorkspace.windows:
+      var tiled = 0
+      for w in scr.getActiveWorkspace.windows.mitems:
         if not w.isFloating:
-          scr.getActiveWorkspace.windows[i].bounds = rect((windowWidth * i).float + scr.bounds.x,
-              scr.bounds.y, windowWidth.float, windowHeight.float)
-          discard XMoveResizeWindow(d.display, w.window, (windowWidth * i).cint,
+          scr.getActiveWorkspace.windows[tiled].bounds = rect((windowWidth * tiled).float +
+              scr.bounds.x, scr.bounds.y, windowWidth.float, windowHeight.float)
+          discard XMoveResizeWindow(d.display, w.window, (windowWidth * tiled).cint,
               scr.bounds.y.cint, windowWidth.cuint, windowHeight)
+          inc tiled
 
 func add*(s: var Screen, window: ManagedWindow) = s.getActiveWorkspace.windows.add window
 
@@ -126,6 +128,7 @@ func mouseEnter*(d: var Desktop, w: Window) =
   ## then make it active
   if w != d.root:
     d.activeWindow = some(w)
+    d.mouseState = none
     var i = 0
     for wind in d.getActiveWorkspace.windows.mitems:
       if wind.window == w:
@@ -135,34 +138,12 @@ func mouseEnter*(d: var Desktop, w: Window) =
 
   discard XSetInputFocus(d.display, w, RevertToParent, CurrentTime)
 
-func mouseMotion*(d: var Desktop, x, y: int, w: Window) =
-  ## On mouse motion assign the active window and change active screen
-  d.mouseEnter(w)
-  let pos = vec2(x.float32, y.float32)
-  for scr in d.screens.mitems:
-    scr.isActive = scr.bounds.overlaps pos
-
-proc onKey*(d: var Desktop, key: Key) =
-  if key in d.shortcuts:
-    let key = d.shortcuts[key]
-    case key.kind
-    of command:
-      discard startProcess(key.cmd, args = key.args, options = {poUsePath})
-    of function:
-      if key.event != nil:
-        key.event(d)
-
-proc onButton*(d: var Desktop, btn: Button, x, y: int32) =
-  if btn in d.mouseShortcuts:
-    let btn = d.mouseShortcuts[btn]
-    btn(d, ivec2(x, y))
-
 iterator keys*(d: Desktop): Key =
   for x in d.shortcuts.keys:
     yield x
 
 iterator buttons*(d: Desktop): Button =
-  for x in d.mouseShortcuts.keys:
+  for x in d.mouseEvent.keys:
     yield x
 
 func killActiveWindow(d: var Desktop) =
@@ -238,13 +219,25 @@ func toggleFloating(d: var Desktop) =
   d.layoutActive
 
 func moveFloating(d: var Desktop, pos: Ivec2) =
-  if d.hasActiveWindow:
+  if d.hasActiveWindow and d.getActiveWindow.isFloating:
     let
       windowBounds = d.getActiveWindow.bounds
       x = (pos.x - windowBounds.w.int div 2).cint
       y = (pos.y - windowBounds.h.int div 2).cint
       w = windowBounds.w.cuint
       h = windowBounds.h.cuint
+    d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
+    discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
+
+func scaleFloating(d: var Desktop, pos: Ivec2) =
+  if d.hasActiveWindow and d.getActiveWindow.isFloating:
+    let
+      windowBounds = d.getActiveWindow.bounds
+      w = abs(pos.x - windowBounds.x.int).cuint
+      h = abs(pos.y - windowBounds.y.int).cuint
+      x = windowBounds.x.cint
+      y = windowBounds.y.cint
+    d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
     discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
 func getScreens*(d: var Desktop) =
@@ -269,4 +262,42 @@ func getScreens*(d: var Desktop) =
   d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
   d.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
 
-  d.mouseShortcuts[initButton(1, Alt)] = moveFloating
+  template addEvent(button: int, mods: cuint, state: MouseInput) =
+    d.mouseEvent[initButton(button, mods)] = proc(d: var Desktop, isReleased: bool) =
+      d.mouseState =
+        if isReleased:
+          MouseInput.none
+        else:
+          state
+
+  addEvent(1, Alt, moving)
+  addEvent(3, Alt, resizing)
+
+func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
+  ## On mouse motion assign the active window and change active screen
+  case d.mouseState:
+  of none:
+    d.mouseEnter(w)
+    let pos = vec2(x.float32, y.float32)
+    for scr in d.screens.mitems:
+      scr.isActive = scr.bounds.overlaps pos
+  of resizing:
+    d.scaleFloating(ivec2(x, y))
+  of moving:
+    d.moveFloating(ivec2(x, y))
+
+proc onKey*(d: var Desktop, key: Key) =
+  if key in d.shortcuts:
+    let key = d.shortcuts[key]
+    case key.kind
+    of command:
+      discard startProcess(key.cmd, args = key.args, options = {poUsePath})
+    of function:
+      if key.event != nil:
+        key.event(d)
+
+proc onButton*(d: var Desktop, btn: Button, pressed: bool) =
+  if btn in d.mouseEvent:
+    let btn = d.mouseEvent[btn]
+    btn(d, pressed)
+
