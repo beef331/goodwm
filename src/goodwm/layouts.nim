@@ -1,69 +1,94 @@
-import bumpy
+import bumpy, cps
+import std/options
 
 type
   ScreenLayout* = enum
     verticalDown, verticalUp, horizontalRight, horizontalLeft, #alternatingRight, alternatingLeft
+  LayoutIter* = ref object of Continuation
+    rect: Option[Rect]
 
-proc layoutVerticalUp(freeSpace: Rect, count: int): iterator(): Rect =
-  result = iterator(): Rect =
-    if count == 0:
-      yield freeSpace
-    else:
-      let
-        width = freeSpace.w
-        height = freeSpace.h / count.float
-      var y = freeSpace.y + freeSpace.h
-      for _ in 0..<count:
-        yield rect(freeSpace.x, y, width, height)
-        y -= height
+proc getBounds*(c: LayoutIter): Rect =
+  block:
+    var c: Continuation = c
+    while c.running and (LayoutIter c).rect.isNone:
+      c = c.fn(c)
+  if not c.dismissed:
+    if c.rect.isSome:
+      result = c.rect.get
+      c.rect = none(Rect)
 
-proc layoutVerticalDown(freeSpace: Rect, count: int): iterator(): Rect =
-  result = iterator(): Rect =
-    if count == 0:
-      yield freeSpace
-    else:
-      let
-        width = freeSpace.w
-        height = freeSpace.h / count.float
-      var y = freeSpace.y
-      for _ in 0..<count:
-        yield rect(freeSpace.x, y, width, height)
-        y += height
+proc jield(c: LayoutIter, rect: Rect): LayoutIter {.cpsMagic.} =
+  c.rect = some(rect)
+  return c
 
-proc layoutHorizontalRight(freeSpace: Rect, count: int): iterator(): Rect =
-  result = iterator(): Rect =
-    if count == 1:
-      yield freeSpace
-    else:
-      let
-        width = freeSpace.w / count.float
-        height = freeSpace.h
-      var x = freeSpace.x
-      for _ in 0..<count:
-        yield rect(x, freeSpace.y, width, height)
-        x += width
+proc layoutVerticalUp(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+  if count == 0:
+    jield freeSpace
+  else:
+    let
+      width = freeSpace.w
+      height = freeSpace.h / count.float
+    var
+      y = freeSpace.y + freeSpace.h
+      i = 0
+    while i < count:
+      jield rect(freeSpace.x, y, width, height)
+      y -= height
+      inc i
 
-proc layoutHorizontalLeft(freeSpace: Rect, count: int): iterator(): Rect =
-  result = iterator(): Rect =
-    if count == 1:
-      yield freeSpace
-    else:
-      let
-        width = freeSpace.w / count.float
-        height = freeSpace.h
-      var x = freeSpace.x + freeSpace.w
-      for _ in 0..<count:
-        yield rect(x, freeSpace.y, width, height)
-        x -= width
+proc layoutVerticalDown(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+  if count == 0:
+    jield freeSpace
+  else:
+    let
+      width = freeSpace.w
+      height = freeSpace.h / count.float
+    var
+      y = freeSpace.y
+      i = 0
+    while i < count:
+      jield rect(freeSpace.x, y, width, height)
+      y += height
+      inc i
 
-proc getLayout*(freeSpace: Rect, count: int, layout: ScreenLayout): iterator(): Rect =
+proc layoutHorizontalRight(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+  if count == 1:
+    jield freeSpace
+  else:
+    let
+      width = freeSpace.w / count.float
+      height = freeSpace.h
+    var
+      x = freeSpace.x
+      i = 0
+    while i < count:
+      jield rect(x, freeSpace.y, width, height)
+      x += width
+      inc i
+
+proc layoutHorizontalLeft(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+  if count == 1:
+    jield freeSpace
+  else:
+    let
+      width = freeSpace.w / count.float
+      height = freeSpace.h
+    var
+      x = freeSpace.x + freeSpace.w
+      i = 0
+    while i < count:
+      jield rect(x, freeSpace.y, width, height)
+      x -= width
+      inc i
+
+proc getLayout*(freeSpace: Rect, count: int, layout: ScreenLayout): LayoutIter =
   result =
     case layout:
     of horizontalLeft:
-      layoutHorizontalLeft(freeSpace, count)
+      whelp layoutHorizontalLeft(freeSpace, count)
     of horizontalRight:
-      layoutHorizontalRight(freeSpace, count)
+      whelp layoutHorizontalRight(freeSpace, count)
     of verticalDown:
-      layoutVerticalDown(freeSpace, count)
+      whelp layoutVerticalDown(freeSpace, count)
     of verticalUp:
-      layoutVerticalUp(freeSpace, count)
+      whelp layoutVerticalUp(freeSpace, count)

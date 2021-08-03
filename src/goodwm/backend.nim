@@ -91,7 +91,7 @@ func layoutActive(d: var Desktop) =
         let layout = getLayout(d.getActiveScreen.bounds, tiledWindowCount, d.getActiveScreen.layout)
         for i, w in scr.getActiveWorkspace.windows:
           if not w.isFloating:
-            let bounds = layout()
+            let bounds = layout.getBounds()
             scr.getActiveWorkspace.windows[i].bounds = bounds
             discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
                 bounds.w.cuint, bounds.h.cuint)
