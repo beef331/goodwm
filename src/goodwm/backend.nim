@@ -16,8 +16,6 @@ type
     active: int
     windows: seq[ManagedWindow]
 
-
-
   Screen* = object
     isActive: bool
     bounds: Rect
@@ -247,7 +245,7 @@ func scaleFloating(d: var Desktop, pos: Ivec2) =
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
     discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
-func getScreens*(d: var Desktop) =
+proc getScreens*(d: var Desktop) =
   d.screens = @[]
   let dis = d.display
   var
@@ -257,7 +255,7 @@ func getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight, barSize: 50)
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight, barSize: 30)
   d.screens[0].isActive = true
   #Temporary injection site
   d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
