@@ -3,7 +3,6 @@ import std/[tables, osproc, options, strutils, decls]
 import bumpy, vmath
 import inputs
 
-
 type
   KeyEvent* = proc(d: var Desktop){.nimcall.}
   MouseEvent* = proc(d: var Desktop, pos: IVec2)
@@ -37,6 +36,9 @@ type
     of function:
       event: KeyEvent
 
+  MouseInput = enum
+    none, resizing, moving
+
   Desktop* = object
     display*: PDisplay
     root*: Window
@@ -44,7 +46,8 @@ type
     screens: seq[Screen]
     activeWindow: Option[Window]
     shortcuts: Table[Key, Shortcut]
-    mouseShortcuts: Table[Button, MouseEvent]
+    mouseState: MouseInput
+    mouseShortcuts: Table[Button, MouseEvent] # Maybe seperate to press/motion/release
 
 
 func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
@@ -149,8 +152,10 @@ proc onKey*(d: var Desktop, key: Key) =
       if key.event != nil:
         key.event(d)
 
-proc onButton*(d: var Desktop, evt: XButtonEvent) =
-  discard
+proc onButton*(d: var Desktop, btn: Button, x, y: int32) =
+  if btn in d.mouseShortcuts:
+    let btn = d.mouseShortcuts[btn]
+    btn(d, ivec2(x, y))
 
 iterator keys*(d: Desktop): Key =
   for x in d.shortcuts.keys:
@@ -204,7 +209,6 @@ func moveDown(d: var Desktop) =
           d.moveCursorToActive
           break
 
-
 func focusUp(d: var Desktop) =
   ## Focuses the window above the active one in the active screens stack
   if d.activeWindow.isSome:
@@ -234,8 +238,14 @@ func toggleFloating(d: var Desktop) =
   d.layoutActive
 
 func moveFloating(d: var Desktop, pos: Ivec2) =
-  discard
-
+  if d.hasActiveWindow:
+    let
+      windowBounds = d.getActiveWindow.bounds
+      x = (pos.x - windowBounds.w.int div 2).cint
+      y = (pos.y - windowBounds.h.int div 2).cint
+      w = windowBounds.w.cuint
+      h = windowBounds.h.cuint
+    discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
 func getScreens*(d: var Desktop) =
   d.screens = @[]
