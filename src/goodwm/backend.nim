@@ -230,6 +230,9 @@ proc moveToLastActive*(d: var Desktop) =
       scr.workSpaces.len) mod scr.workSpaces.len
   d.mapWindows()
 
+proc growWorkspace*(d: var Desktop) =
+  d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
+
 proc getScreens*(d: var Desktop) =
   d.screens = @[]
   let dis = d.display
@@ -247,6 +250,7 @@ proc getScreens*(d: var Desktop) =
   d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
   d.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
   d.shortcuts[initKey(dis, "f", Alt)] = initShortcut(toggleFloating)
+  d.shortcuts[initKey(dis, "l", Alt)] = initShortcut(growWorkspace)
   d.shortcuts[initKey(dis, "Up", Alt)] = initShortcut(focusUp)
   d.shortcuts[initKey(dis, "Down", Alt)] = initShortcut(focusDown)
   d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)

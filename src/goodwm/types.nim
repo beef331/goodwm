@@ -72,6 +72,7 @@ type
     renderer*: Renderer
     window*: sdl.Window
     widgets*: Widgets
+    dir*: StatusBarDirection
 
   WidgetKind* = enum
     wkWorkspace, wkTime, wkCommand
