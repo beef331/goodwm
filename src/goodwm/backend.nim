@@ -269,16 +269,14 @@ proc getScreens*(d: var Desktop) =
   d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
   d.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
 
-  template addEvent(button: int, mods: cuint, state: MouseInput) =
-    d.mouseEvent[initButton(button, mods)] = proc(d: var Desktop, isReleased: bool) =
-      d.mouseState =
-        if isReleased:
+  proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
+    d.mouseState =
+      if isReleased:
           MouseInput.none
         else:
-          state
-
-  addEvent(1, Alt, moving)
-  addEvent(3, Alt, resizing)
+          T
+  d.mouseEvent[initButton(1, Alt)] = eventProc[moving]
+  d.mouseEvent[initButton(3, Alt)] = eventProc[resizing]
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   ## On mouse motion assign the active window and change active screen

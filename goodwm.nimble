@@ -22,3 +22,7 @@ requires "sdl2_nim >= 2.0.14.1"
 task demo, "Makes and tests the binary":
   exec "nimble build"
   exec "Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"
+
+task demor, "Makes and tests the binary":
+  exec "nimble build -d:danger"
+  exec "Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"
