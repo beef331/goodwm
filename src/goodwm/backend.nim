@@ -1,55 +1,8 @@
-import x11/[x, xinerama, xlib]
+import x11/[x, xinerama]
+import x11/xlib except Screen
 import std/[tables, osproc, options, strutils, decls, os]
 import bumpy, vmath, statusbar
-import inputs, layouts
-
-type
-  KeyEvent* = proc(d: var Desktop){.nimcall.}
-  ButtonEvent* = proc(d: var Desktop, isReleased: bool)
-
-  ManagedWindow = object
-    isFloating: bool
-    bounds: Rect
-    window: Window
-
-  Workspace = object
-    active: int
-    windows: seq[ManagedWindow]
-
-  Screen* = object
-    isActive: bool
-    bounds: Rect
-    padding: int
-    activeWorkspace: int
-    layout: ScreenLayout
-    barSize: int
-    barPos: StatusBarPos
-    statusbar: StatusBar
-    workSpaces: seq[Workspace]
-
-  ShortcutKind = enum
-    command, function
-
-  Shortcut = object
-    case kind: ShortcutKind
-    of command:
-      cmd: string
-      args: seq[string]
-    of function:
-      event: KeyEvent
-
-  MouseInput = enum
-    none, resizing, moving
-
-  Desktop* = object
-    display*: PDisplay
-    root*: Window
-    screen*: cint
-    screens: seq[Screen]
-    activeWindow: Option[Window]
-    shortcuts: Table[Key, Shortcut]
-    mouseState: MouseInput
-    mouseEvent: Table[Button, ButtonEvent]
+import inputs, layouts, types
 
 
 func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
@@ -145,7 +98,7 @@ func mouseEnter*(d: var Desktop, w: Window) =
   ## then make it active
   if w != d.root:
     d.activeWindow = some(w)
-    d.mouseState = none
+    d.mouseState = miNone
     var i = 0
     for wind in d.getActiveWorkspace.windows.mitems:
       if wind.window == w:
@@ -304,23 +257,23 @@ proc getScreens*(d: var Desktop) =
   proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
     d.mouseState =
       if isReleased:
-          MouseInput.none
+          miNone
         else:
           T
-  d.mouseEvent[initButton(1, Alt)] = eventProc[moving]
-  d.mouseEvent[initButton(3, Alt)] = eventProc[resizing]
+  d.mouseEvent[initButton(1, Alt)] = eventProc[miMoving]
+  d.mouseEvent[initButton(3, Alt)] = eventProc[miResizing]
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   ## On mouse motion assign the active window and change active screen
   case d.mouseState:
-  of none:
+  of miNone:
     d.mouseEnter(w)
     let pos = vec2(x.float32, y.float32)
     for scr in d.screens.mitems:
       scr.isActive = scr.bounds.overlaps pos
-  of resizing:
+  of miResizing:
     d.scaleFloating(ivec2(x, y))
-  of moving:
+  of miMoving:
     d.moveFloating(ivec2(x, y))
 
 proc onKey*(d: var Desktop, key: Key) =

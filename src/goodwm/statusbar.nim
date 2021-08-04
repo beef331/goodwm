@@ -2,34 +2,7 @@ import pixie
 import x11/x
 import std/[times, osproc]
 import sdl2/[sdl, sdl_syswm]
-
-type
-  StatusBarDirection* = enum
-    sbdLeft, sbdRight, sbdDown, sbdUp
-
-  StatusBar* = object
-    width, height: int
-    img: Image
-    renderer: Renderer
-    window: sdl.Window
-    widgets: Widgets
-
-  WidgetKind* = enum
-    wkWorkspace, wkTime, wkCommand
-
-  Widget* = object
-    size*: int
-    margin*: int
-    case kind*: WidgetKind
-    of wkCommand:
-      cmd*: string
-    else: discard
-
-  StatusBarData* = object
-    openWorkspaces*: int
-    activeWorkspace*: int
-
-  Widgets* = seq[Widget]
+import types
 
 const
   rmask = uint32 0x000000ff

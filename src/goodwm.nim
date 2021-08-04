@@ -1,6 +1,6 @@
 import x11/[xlib, x, xutil, xatom]
 import std/os
-import goodwm/[backend, inputs]
+import goodwm/[backend, inputs, types]
 
 const
   XTrue = true.XBool
@@ -74,7 +74,6 @@ proc setup(): Desktop =
         GrabModeASync, GrabModeAsync, None, None)
 
   discard XSelectInput(display, result.root, eventMask)
-
   discard XSync(display, XTrue)
 
 proc run() =

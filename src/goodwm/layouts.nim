@@ -1,13 +1,8 @@
 import bumpy, cps
 import std/options
+import types
 
 type
-  ScreenLayout* = enum
-    verticalDown, verticalUp, horizontalRight, horizontalLeft, #alternatingRight, alternatingLeft
-
-  StatusBarPos* = enum
-    sbpTop, sbpBot, sbpLeft, sbpRight
-
   LayoutIter* = ref object of Continuation
     rect: Option[Rect]
 
