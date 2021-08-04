@@ -1,4 +1,7 @@
-import pixie, glfw, opengl
+import pixie
+import x11/x
+import std/times
+import sdl2/[sdl, sdl_syswm]
 
 type
   StatusBarDirection* = enum
@@ -6,31 +9,51 @@ type
   StatusBar* = object
     width, height: int
     img: Image
-    ctx: Context
-    window: Window
+    renderer: Renderer
+    window: sdl.Window
 
-proc display(statusBar: StatusBar) = 
+const
+  rmask = uint32 0x000000ff
+  gmask = uint32 0x0000ff00
+  bmask = uint32 0x00ff0000
+  amask = uint32 0xff000000
+var font = readFont("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Bold.ttf")
+
+proc display(sb: StatusBar) =
   # update texture with new pixels from surface
-  var dataPtr = statusBar.img.data[0].unsafeaddr
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GLsizei statusBar.width, GLsizei statusBar.height, GL_RGBA,
-      GL_UNSIGNED_BYTE, dataPtr)
+  sb.img.fill(parseHex("1f2430"))
+  let time = now()
+  sb.img.fillText(font, $time, vec2(0, 0))
+  var dataPtr = sb.img.data[0].unsafeaddr
+  let
+    mainSurface = createRGBSurfaceFrom(dataPtr, cint sb.width, cint sb.height, cint 32, cint 4 *
+      sb.width, rmask, gmask, bmask, amask)
+    mainTexture = sb.renderer.createTextureFromSurface(mainSurface)
+  echo getError()
+  discard sb.renderer.renderClear
+  if sb.renderer.renderCopy(mainTexture, nil, nil) == -1:
+    echo "Copy Failed"
+  sb.renderer.renderPresent
+  destroyTexture(mainTexture)
+  freeSurface(mainSurface)
 
-  # draw a quad over the whole screen
-  glClear(GL_COLOR_BUFFER_BIT)
-  glBegin(GL_QUADS)
-  glTexCoord2d(0.0, 0.0); glVertex2d(-1.0, +1.0)
-  glTexCoord2d(1.0, 0.0); glVertex2d(+1.0, +1.0)
-  glTexCoord2d(1.0, 1.0); glVertex2d(+1.0, -1.0)
-  glTexCoord2d(0.0, 1.0); glVertex2d(-1.0, -1.0)
-  glEnd()
+proc getXWindow*(sb: StatusBar): x.Window =
+  var wmInfo: SysWMinfo
+  version(wmInfo.version)
+  if getWindowWMInfo(sb.window, wmInfo.addr):
+    result = wmInfo.info.x11.window
+  else:
+    debugecho "Cannot get info"
 
-  swapBuffers(statusBar.window)
 
 proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
-  glfw.initialize()
-  result.window = createWindow(width.cint, height.cint, "Goodwm Status Bar", nil, nil)
-  makeContextCurrent(result.window)
-  loadExtensions()
+  discard init(InitVideo)
+  result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, WindowShown)
+  result.renderer = createRenderer(result.window, -1, 0)
+  result.img = newImage(width, height)
+  result.width = width
+  result.height = height
+  result.img.fill(rgb(255, 255, 255))
 
 proc drawBar*(bar: StatusBar) =
   bar.display

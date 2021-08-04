@@ -82,7 +82,9 @@ proc run() =
   var
     ev: XEvent = XEvent()
     desktop = setup()
+    barThrd: Thread[ptr Desktop]
   if desktop.display != nil:
+    createThread barThrd, drawBars, desktop.addr
     while true:
       while(XNextEvent(desktop.display, ev.addr) == 0):
         case (ev.theType):

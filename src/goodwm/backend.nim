@@ -1,6 +1,6 @@
 import x11/[x, xinerama, xlib]
-import std/[tables, osproc, options, strutils, decls]
-import bumpy, vmath
+import std/[tables, osproc, options, strutils, decls, os]
+import bumpy, vmath, statusbar
 import inputs, layouts
 
 type
@@ -24,6 +24,7 @@ type
     layout: ScreenLayout
     barSize: int
     barPos: StatusBarPos
+    statusbar: StatusBar
     workSpaces: seq[Workspace]
 
   ShortcutKind = enum
@@ -215,13 +216,14 @@ func focusDown(d: var Desktop) =
           break
 
 func toggleFloating(d: var Desktop) =
-  d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
-  let w = d.getActiveWindow.window
-  if d.getActiveWindow.isFloating:
-    discard XRaiseWindow(d.display, w)
-  else:
-    discard XLowerWindow(d.display, w)
-  d.layoutActive
+  if d.activeWindow.isSome:
+    d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
+    let w = d.getActiveWindow.window
+    if d.getActiveWindow.isFloating:
+      discard XRaiseWindow(d.display, w)
+    else:
+      discard XLowerWindow(d.display, w)
+    d.layoutActive
 
 func moveFloating(d: var Desktop, pos: Ivec2) =
   if d.hasActiveWindow and d.getActiveWindow.isFloating:
@@ -255,7 +257,8 @@ proc getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight, barSize: 30)
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight,
+        barSize: 30, statusBar: initStatusBar(screen.width, 30))
   d.screens[0].isActive = true
   #Temporary injection site
   d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
@@ -305,3 +308,13 @@ proc onButton*(d: var Desktop, btn: Button, pressed: bool) =
     let btn = d.mouseEvent[btn]
     btn(d, pressed)
 
+proc drawBars*(d: ptr Desktop) {.thread.} =
+  while true:
+    for scr in d[].screens:
+      let sbW = getXWindow(scr.statusbar)
+      discard XMapWindow(d.display, sbW)
+      discard XRaiseWindow(d.display, sbw)
+      discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, 30)
+      {.cast(gcSafe).}: # Some lies and deciet never hurt anyone i think
+        scr.statusBar.drawBar()
+    sleep 16
