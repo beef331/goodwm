@@ -1,16 +1,35 @@
 import pixie
 import x11/x
-import std/times
+import std/[times, osproc]
 import sdl2/[sdl, sdl_syswm]
 
 type
   StatusBarDirection* = enum
     sbdLeft, sbdRight, sbdDown, sbdUp
+
   StatusBar* = object
     width, height: int
     img: Image
     renderer: Renderer
     window: sdl.Window
+    widgets: Widgets
+
+  WidgetKind* = enum
+    wkWorkspace, wkTime, wkCommand
+
+  Widget* = object
+    size*: int
+    margin*: int
+    case kind*: WidgetKind
+    of wkCommand:
+      cmd*: string
+    else: discard
+
+  StatusBarData* = object
+    openWorkspaces*: int
+    activeWorkspace*: int
+
+  Widgets* = seq[Widget]
 
 const
   rmask = uint32 0x000000ff
@@ -23,11 +42,10 @@ let
   fg = parseHex("cbccc6").rgba
 font.paint.color = fg
 font.size = 15
+
 proc display(sb: StatusBar) =
   # update texture with new pixels from surface
-  sb.img.fill(bg)
-  let timeString = format(now(), "HH:mm:ss dd/MM/yy ddd")
-  sb.img.fillText(font, timeString, vec2(0, 0))
+
   var dataPtr = sb.img.data[0].unsafeaddr
   let
     mainSurface = createRGBSurfaceFrom(dataPtr, cint sb.width, cint sb.height, cint 32, cint 4 *
@@ -47,7 +65,6 @@ proc getXWindow*(sb: StatusBar): x.Window =
   else:
     debugecho "Cannot get info"
 
-
 proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
   discard init(InitVideo)
   result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, WindowShown)
@@ -56,6 +73,38 @@ proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
   result.width = width
   result.height = height
   result.img.fill(rgb(255, 255, 255))
+  result.widgets.add Widget(kind: wkWorkspace, size: 100, margin: 5)
 
-proc drawBar*(bar: StatusBar) =
+proc drawWorkspaces(bar: StatusBar, active, count: int, wid: Widget, pos: var Vec2) =
+  let ctx = newContext(bar.img)
+  for i in 0..<count:
+    if i == active:
+      ctx.fillStyle = parseHex("ffcc66").rgba
+    else:
+      ctx.fillStyle = parseHex("707a8c").rgba
+    let radius = bar.height / 2
+    ctx.fillCircle(pos + vec2(radius, radius), radius)
+    pos.x += radius * 2 + wid.margin.float
+
+
+proc drawTime(bar: StatusBar, format: string, pos: var Vec2) =
+  let timeString = format(now(), format)
+  bar.img.fillText(font, timeString, pos)
+
+proc drawCommand(bar: StatusBar, command: string, pos: var Vec2) =
+  let msg = execProcess(command)
+  bar.img.fillText(font, msg, pos)
+
+proc drawBar*(bar: StatusBar, data: StatusBarData) =
+  var pos = vec2(0, 0)
+  bar.img.fill(bg)
+  for i, widg in bar.widgets:
+    case widg.kind
+    of wkWorkspace:
+      bar.drawWorkspaces(data.activeWorkspace, data.openWorkspaces, widg, pos)
+    of wkTime:
+      bar.drawTime("HH:mm:ss dd/MM/yy ddd", pos)
+    of wkCommand:
+      drawCommand(bar, widg.cmd, pos)
+
   bar.display

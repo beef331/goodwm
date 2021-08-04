@@ -66,8 +66,16 @@ func getActiveScreen*(d: var Desktop): var Screen =
       return x
   result = d.screens[0]
 
+func getActiveScreen*(d: Desktop): Screen =
+  for x in d.screens:
+    if x.isActive:
+      return x
+  result = d.screens[0]
+
 func getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
 func getActiveWorkspace(d: var Desktop): var Workspace = d.getActiveScreen.getActiveWorkSpace
+func getActiveWorkspace(s: Screen): Workspace = s.workSpaces[s.activeWorkspace]
+func getActiveWorkspace(d: Desktop): Workspace = d.getActiveScreen.getActiveWorkSpace
 
 
 func getActiveWindow*(w: var Workspace): var ManagedWindow = w.windows[w.active]
@@ -123,6 +131,14 @@ func addWindow*(d: var Desktop, window: Window, x, y, width, height: int, isFloa
           bounds: bounds)
       d.layoutActive
       return
+
+func unMapWindows(d: var Desktop) =
+  for x in d.getActiveWorkspace.windows:
+    discard XUnmapWindow(d.display, x.window)
+
+func mapWindows(d: var Desktop) =
+  for x in d.getActiveWorkspace.windows:
+    discard XMapWindow(d.display, x.window)
 
 func mouseEnter*(d: var Desktop, w: Window) =
   ## Mouse entered a new window, ensure it's not root,
@@ -247,6 +263,20 @@ func scaleFloating(d: var Desktop, pos: Ivec2) =
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
     discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
+proc moveToNextActive*(d: var Desktop) =
+  d.unmapWindows()
+  let scr = d.getActiveScreen
+  d.getActiveScreen.activeWorkspace = (scr.activeWorkspace + 1 +
+      scr.workSpaces.len) mod scr.workSpaces.len
+  d.mapWindows()
+
+proc moveToLastActive*(d: var Desktop) =
+  d.unmapWindows()
+  let scr = d.getActiveScreen
+  d.getActiveScreen.activeWorkspace = (scr.activeWorkspace - 1 +
+      scr.workSpaces.len) mod scr.workSpaces.len
+  d.mapWindows()
+
 proc getScreens*(d: var Desktop) =
   d.screens = @[]
   let dis = d.display
@@ -257,7 +287,7 @@ proc getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), layout: horizontalRight,
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](3), layout: horizontalRight,
         barSize: 30, statusBar: initStatusBar(screen.width, 30))
   d.screens[0].isActive = true
   #Temporary injection site
@@ -268,6 +298,8 @@ proc getScreens*(d: var Desktop) =
   d.shortcuts[initKey(dis, "Down", Alt)] = initShortcut(focusDown)
   d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
   d.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
+  d.shortcuts[initKey(dis, "Left", Alt or Shift)] = initShortcut(moveToLastActive)
+  d.shortcuts[initKey(dis, "Right", Alt or Shift)] = initShortcut(moveToNextActive)
 
   proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
     d.mouseState =
@@ -313,6 +345,7 @@ proc drawBars*(d: ptr Desktop) {.thread.} =
       discard XMapWindow(d.display, sbW)
       discard XRaiseWindow(d.display, sbw)
       discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, 30)
-      {.cast(gcSafe).}: # Some lies and deciet never hurt anyone i think
-        scr.statusBar.drawBar()
+      {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
+        scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
+            activeWorkspace: scr.activeWorkspace))
     sleep 16
