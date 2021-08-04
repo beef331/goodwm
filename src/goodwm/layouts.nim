@@ -7,17 +7,24 @@ type
     rect: Option[Rect]
 
 
-func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, size: int): Rect =
+func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, barSize, margin: int): Rect =
   result = rect
   case barPos:
   of sbpTop:
-    result.y += size.float
+    result.y += barSize.float
+    result.h -= barSize.float
   of sbpBot:
-    result.h -= size.float
+    result.h -= barSize.float
   of sbpLeft:
-    result.x += size.float
+    result.x += barSize.float
+    result.w -= barSize.float
   of sbpRight:
-    result.w -= size.float
+    result.w -= barSize.float
+
+  result.x += margin / 2
+  result.y += margin / 2
+  result.w -= margin.float
+  result.h -= margin.float
 
 
 proc getBounds*(c: LayoutIter): Rect =

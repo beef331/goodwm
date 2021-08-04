@@ -54,7 +54,7 @@ func layoutActive(d: var Desktop) =
     if tiledWindowCount > 0:
       {.noSideEffect.}: # I'm a liar and a scoundrel
         let
-          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize)
+          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, 20)
           layout = getLayout(freeSpace, tiledWindowCount, scr.layout)
         for i, w in scr.getActiveWorkspace.windows:
           if not w.isFloating:
