@@ -74,6 +74,7 @@ proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
   result.height = height
   result.img.fill(rgb(255, 255, 255))
   result.widgets.add Widget(kind: wkWorkspace, size: 100, margin: 5)
+  result.widgets.add Widget(kind: wkTime)
 
 proc drawWorkspaces(bar: StatusBar, active, count: int, wid: Widget, pos: var Vec2) =
   let ctx = newContext(bar.img)
@@ -88,8 +89,11 @@ proc drawWorkspaces(bar: StatusBar, active, count: int, wid: Widget, pos: var Ve
 
 
 proc drawTime(bar: StatusBar, format: string, pos: var Vec2) =
-  let timeString = format(now(), format)
-  bar.img.fillText(font, timeString, pos)
+  let
+    timeString = format(now(), format)
+    yOffset = font.size / 2
+
+  bar.img.fillText(font, timeString, pos + vec2(0, yOffset.float))
 
 proc drawCommand(bar: StatusBar, command: string, pos: var Vec2) =
   let msg = execProcess(command)

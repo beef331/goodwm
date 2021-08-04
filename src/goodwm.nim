@@ -79,6 +79,7 @@ proc setup(): Desktop =
 
 proc run() =
   ##The main loop, it's main.
+  discard XInitThreads()
   var
     ev: XEvent = XEvent()
     desktop = setup()
