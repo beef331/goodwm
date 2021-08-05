@@ -41,7 +41,7 @@ proc getXWindow*(sb: StatusBar): x.Window =
 proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
   discard init(InitVideo)
   result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, WindowShown)
-  result.renderer = createRenderer(result.window, -1, 0)
+  result.renderer = createRenderer(result.window, -1, RendererAccelerated)
   result.img = newImage(width, height)
   result.width = width
   result.height = height

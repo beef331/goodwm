@@ -1,6 +1,6 @@
 import x11/[xlib, x, xutil, xatom]
 import std/os
-import goodwm/[backend, inputs, types]
+import goodwm/[desktops, inputs, types]
 
 const
   XTrue = true.XBool
@@ -52,31 +52,7 @@ proc setup(): Desktop =
   result.root = RootWindow(display, result.screen)
 
   discard XSetErrorHandler(errorHandler)
-
-  const
-    eventMask = StructureNotifyMask or
-                SubstructureRedirectMask or
-                SubstructureNotifyMask or
-                ButtonPressMask or
-                PointerMotionMask or
-                EnterWindowMask or
-                LeaveWindowMask or
-                PropertyChangeMask or
-                KeyPressMask or
-                KeyReleaseMask
-    mouseMask = ButtonMotionMask or ButtonPressMask or ButtonReleaseMask
-
   result.getScreens()
-
-  for key in result.keys:
-    discard XGrabKey(display, key.code.cint, key.modi, result.root, XFalse, GrabModeAsync, GrabModeAsync)
-
-  for btn in result.buttons:
-    discard XGrabButton(display, btn.btn.cuint, btn.modi, result.root, XFalse, mouseMask,
-        GrabModeASync, GrabModeAsync, None, None)
-
-  discard XSelectInput(display, result.root, eventMask)
-  discard XSync(display, XTrue)
 
 proc run() =
   ##The main loop, it's main.
@@ -86,7 +62,8 @@ proc run() =
     desktop = setup()
     barThrd: Thread[ptr Desktop]
   if desktop.display != nil:
-    createThread barThrd, drawBars, desktop.addr
+    desktop.loadConfig()
+    createThread(barThrd, drawBars, desktop.addr)
     while true:
       while(XNextEvent(desktop.display, ev.addr) == 0):
         case (ev.theType):

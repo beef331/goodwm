@@ -18,6 +18,7 @@ requires "bumpy"
 requires "https://github.com/disruptek/cps"
 requires "pixie"
 requires "sdl2_nim >= 2.0.14.1"
+requires "toml_serialization >= 0.2.0"
 
 task demo, "Makes and tests the binary":
   exec "nimble build"

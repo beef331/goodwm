@@ -23,12 +23,13 @@ type
   Screen* = object
     isActive*: bool
     bounds*: pixie.Rect
-    padding*: int
     activeWorkspace*: int
-    layout*: ScreenLayout
-    barSize*: int
+    statusBar*: StatusBar
     barPos*: StatusBarPos
-    statusbar*: StatusBar
+    barSize*: int
+    margin*: int
+    padding*: int
+    layout*: ScreenLayout
     workSpaces*: seq[Workspace]
 
   ShortcutKind* = enum
@@ -43,7 +44,9 @@ type
       event*: KeyEvent
 
   MouseInput* = enum
-    miNone, miResizing, miMoving
+    miNone = "none"
+    miResizing = "resize"
+    miMoving = "move"
 
   Desktop* = object
     display*: PDisplay
@@ -89,5 +92,64 @@ type
     openWorkspaces*: int
     activeWorkspace*: int
 
+  KeyEvents* = enum
+    keFocusUp = "focusup"
+    keFocusDown = "focusdown"
+    keMoveUp = "moveup"
+    keMoveDown = "movedown"
+    keClose = "close"
+    keNextWorkspace = "nextworkspace"
+    keLastWorkspace = "lastWorkspace"
+
+
+  KeyConfig* = object
+    key*: Key
+    case isCommand*: bool
+    of true:
+      cmd*: string
+    else:
+      event*: KeyEvents
+
+  ButtonConfig* = object
+    btn*: Button
+    event*: MouseInput
+
   Widgets* = seq[Widget]
 
+  Config* = object
+    screenLayouts*: seq[ScreenLayout]
+    screenStatusBarPos*: seq[StatusBarPos]
+    padding*, margin*, barSize*: int
+    keyShortcuts*: seq[KeyConfig]
+    mouseShortcuts*: seq[ButtonConfig]
+
+
+
+{.push inline.}
+func getActiveScreen*(d: var Desktop): var Screen =
+  for x in d.screens.mitems:
+    if x.isActive:
+      return x
+  result = d.screens[0]
+
+func getActiveScreen*(d: Desktop): Screen =
+  for x in d.screens:
+    if x.isActive:
+      return x
+  result = d.screens[0]
+
+func getActiveWorkspace*(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
+func getActiveWorkspace*(d: var Desktop): var Workspace = d.getActiveScreen.getActiveWorkSpace
+func getActiveWorkspace*(s: Screen): Workspace = s.workSpaces[s.activeWorkspace]
+func getActiveWorkspace*(d: Desktop): Workspace = d.getActiveScreen.getActiveWorkSpace
+
+
+func getActiveWindow*(w: var Workspace): var ManagedWindow = w.windows[w.active]
+func getActiveWindow*(s: var Screen): var ManagedWindow = s.getActiveWorkspace.getActiveWindow
+func getActiveWindow*(d: var Desktop): var ManagedWindow = d.getActiveScreen.getActiveWindow
+
+func hasActiveWindow*(d: var Desktop): bool =
+  let activeWs = d.getActiveWorkspace
+  activeWs.active in 0..<activeWs.windows.len
+
+{.pop.}

@@ -1,4 +1,5 @@
 import x11/[xlib, x]
+import std/strutils
 import types
 const
   Alt* = Mod1Mask
@@ -14,3 +15,12 @@ func initKey*(d: PDisplay, key: string, mods: cuint): Key =
 func initKey*(code: cuint, mods: cuint): Key = Key(code: code, modi: mods)
 
 func initButton*(btn: range[1..5], modi: cuint): Button = Button(btn: btn, modi: modi)
+
+func initShortcut*(evt: KeyEvent): Shortcut =
+  Shortcut(kind: function, event: evt)
+
+func initShortcut*(cmd: string): Shortcut =
+  var args = cmd.split(" ")
+  let cmd = args[0]
+  args = args[1..^1]
+  Shortcut(kind: command, cmd: cmd, args: args)

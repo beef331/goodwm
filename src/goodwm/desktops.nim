@@ -1,112 +1,10 @@
 import x11/[x, xinerama]
 import x11/xlib except Screen
-import std/[tables, osproc, options, strutils, decls, os]
+import std/[tables, osproc, options, strutils, decls, os, monotimes, times]
 import bumpy, vmath, statusbar
-import inputs, layouts, types
+import inputs, layouts, types, configs, windows
 
-
-func initShortcut(evt: KeyEvent): Shortcut = Shortcut(kind: function, event: evt)
-func initShortcut(cmd: string): Shortcut =
-  var args = cmd.split(" ")
-  let cmd = args[0]
-  args = args[1..^1]
-  Shortcut(kind: command, cmd: cmd, args: args)
-
-{.push inline.}
-func getActiveScreen*(d: var Desktop): var Screen =
-  for x in d.screens.mitems:
-    if x.isActive:
-      return x
-  result = d.screens[0]
-
-func getActiveScreen*(d: Desktop): Screen =
-  for x in d.screens:
-    if x.isActive:
-      return x
-  result = d.screens[0]
-
-func getActiveWorkspace(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
-func getActiveWorkspace(d: var Desktop): var Workspace = d.getActiveScreen.getActiveWorkSpace
-func getActiveWorkspace(s: Screen): Workspace = s.workSpaces[s.activeWorkspace]
-func getActiveWorkspace(d: Desktop): Workspace = d.getActiveScreen.getActiveWorkSpace
-
-
-func getActiveWindow*(w: var Workspace): var ManagedWindow = w.windows[w.active]
-func getActiveWindow*(s: var Screen): var ManagedWindow = s.getActiveWorkspace.getActiveWindow
-func getActiveWindow*(d: var Desktop): var ManagedWindow = d.getActiveScreen.getActiveWindow
-
-func hasActiveWindow(d: var Desktop): bool =
-  let activeWs = d.getActiveWorkspace
-  activeWs.active in 0..<activeWs.windows.len
-
-{.pop.}
-
-func tiledWindows(s: Workspace): int =
-  ## Counts the tiled windows
-  for w in s.windows:
-    if not w.isFloating:
-      inc result
-
-func layoutActive(d: var Desktop) =
-  ## Calls the coresponding layout logic required
-  for scr in d.screens.mitems:
-    let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
-    if tiledWindowCount > 0:
-      {.noSideEffect.}: # I'm a liar and a scoundrel
-        let
-          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, 20)
-          layout = getLayout(freeSpace, tiledWindowCount, scr.layout)
-        for i, w in scr.getActiveWorkspace.windows:
-          if not w.isFloating:
-            let bounds = layout.getBounds()
-            scr.getActiveWorkspace.windows[i].bounds = bounds
-            discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
-                bounds.w.cuint, bounds.h.cuint)
-
-func add*(s: var Screen, window: ManagedWindow) = s.getActiveWorkspace.windows.add window
-
-func del*(d: var Desktop, window: Window) =
-  ## Removes a XWindow from the desktop
-  block removeWindow:
-    for scr in d.screens.mitems:
-      for ws in scr.workSpaces.mitems:
-        for i in countdown(ws.windows.high, 0):
-          if ws.windows[i].window == window:
-            ws.windows.delete(i)
-            break removeWindow
-  d.layoutActive()
-
-func addWindow*(d: var Desktop, window: Window, x, y, width, height: int, isFloating: bool) =
-  for scr in d.screens.mitems:
-    if scr.isActive:
-      let bounds = rect(x.float, y.float, width.float, height.float)
-      scr.getActiveWorkspace.windows.add ManagedWindow(isFloating: isFloating, window: window,
-          bounds: bounds)
-      d.layoutActive
-      return
-
-func unMapWindows(d: var Desktop) =
-  for x in d.getActiveWorkspace.windows:
-    discard XUnmapWindow(d.display, x.window)
-
-func mapWindows(d: var Desktop) =
-  for x in d.getActiveWorkspace.windows:
-    discard XMapWindow(d.display, x.window)
-
-func mouseEnter*(d: var Desktop, w: Window) =
-  ## Mouse entered a new window, ensure it's not root,
-  ## then make it active
-  if w != d.root:
-    d.activeWindow = some(w)
-    d.mouseState = miNone
-    var i = 0
-    for wind in d.getActiveWorkspace.windows.mitems:
-      if wind.window == w:
-        d.getActiveWorkspace.active = i
-        break
-      inc i
-
-  discard XSetInputFocus(d.display, w, RevertToParent, CurrentTime)
+export windows
 
 iterator keys*(d: Desktop): Key =
   for x in d.shortcuts.keys:
@@ -234,7 +132,7 @@ proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
 
 proc getScreens*(d: var Desktop) =
-  d.screens = @[]
+  d.screens.setLen(0)
   let dis = d.display
   var
     count: cint
@@ -243,29 +141,10 @@ proc getScreens*(d: var Desktop) =
     let
       screen = displays[x]
       bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](3), layout: horizontalRight,
-        barSize: 30, statusBar: initStatusBar(screen.width, 30))
+    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), barSize: 30,
+        layout: horizontalRight)
   d.screens[0].isActive = true
-  #Temporary injection site
-  d.shortcuts[initKey(dis, "p", Alt)] = initShortcut("rofi -show drun")
-  d.shortcuts[initKey(dis, "q", Alt)] = initShortcut(killActiveWindow)
-  d.shortcuts[initKey(dis, "f", Alt)] = initShortcut(toggleFloating)
-  d.shortcuts[initKey(dis, "l", Alt)] = initShortcut(growWorkspace)
-  d.shortcuts[initKey(dis, "Up", Alt)] = initShortcut(focusUp)
-  d.shortcuts[initKey(dis, "Down", Alt)] = initShortcut(focusDown)
-  d.shortcuts[initKey(dis, "Up", Alt or Shift)] = initShortcut(moveUp)
-  d.shortcuts[initKey(dis, "Down", Alt or Shift)] = initShortcut(moveDown)
-  d.shortcuts[initKey(dis, "Left", Alt or Shift)] = initShortcut(moveToLastActive)
-  d.shortcuts[initKey(dis, "Right", Alt or Shift)] = initShortcut(moveToNextActive)
 
-  proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
-    d.mouseState =
-      if isReleased:
-          miNone
-        else:
-          T
-  d.mouseEvent[initButton(1, Alt)] = eventProc[miMoving]
-  d.mouseEvent[initButton(3, Alt)] = eventProc[miResizing]
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   ## On mouse motion assign the active window and change active screen
@@ -305,4 +184,69 @@ proc drawBars*(d: ptr Desktop) {.thread.} =
       {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
         scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
             activeWorkspace: scr.activeWorkspace))
-    sleep 16
+    sleep(100)
+
+proc grabInputs*(d: var Desktop) =
+  const
+    eventMask = StructureNotifyMask or
+                SubstructureRedirectMask or
+                SubstructureNotifyMask or
+                ButtonPressMask or
+                PointerMotionMask or
+                EnterWindowMask or
+                LeaveWindowMask or
+                PropertyChangeMask or
+                KeyPressMask or
+                KeyReleaseMask
+    mouseMask = ButtonMotionMask or ButtonPressMask or ButtonReleaseMask
+  for key in d.keys:
+    discard XGrabKey(d.display, key.code.cint, key.modi, d.root, false.XBool, GrabModeAsync, GrabModeAsync)
+
+  for btn in d.buttons:
+    discard XGrabButton(d.display, btn.btn.cuint, btn.modi, d.root, false.XBool, mouseMask,
+        GrabModeASync, GrabModeAsync, None, None)
+
+  discard XSelectInput(d.display, d.root, eventMask)
+
+proc loadConfig*(d: var Desktop) =
+  let conf = loadConfig()
+  #[
+  if conf.isSome:
+    let conf = conf.get
+
+    for x in d.screens.mitems:
+      x.margin = conf.margin
+      x.padding = conf.padding
+      x.barSize = conf.barSize
+
+    for i, x in conf.screenLayouts:
+      if i in 0..<d.screens.len:
+        d.screens[i].layout = x
+
+    for i, x in conf.screenStatusBarPos:
+      if i in 0..<d.screens.len:
+        d.screens[i].barPos = x
+  ]#
+  d.shortcuts[initKey(d.display, "p", Alt)] = initShortcut("rofi -show drun")
+  d.shortcuts[initKey(d.display, "q", Alt)] = initShortcut(killActiveWindow)
+  d.shortcuts[initKey(d.display, "f", Alt)] = initShortcut(toggleFloating)
+  d.shortcuts[initKey(d.display, "l", Alt)] = initShortcut(growWorkspace)
+  d.shortcuts[initKey(d.display, "Up", Alt)] = initShortcut(focusUp)
+  d.shortcuts[initKey(d.display, "Down", Alt)] = initShortcut(focusDown)
+  d.shortcuts[initKey(d.display, "Up", Alt or Shift)] = initShortcut(moveUp)
+  d.shortcuts[initKey(d.display, "Down", Alt or Shift)] = initShortcut(moveDown)
+  d.shortcuts[initKey(d.display, "Left", Alt or Shift)] = initShortcut(moveToLastActive)
+  d.shortcuts[initKey(d.display, "Right", Alt or Shift)] = initShortcut(moveToNextActive)
+
+  proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
+    d.mouseState =
+      if isReleased:
+          miNone
+        else:
+          T
+  d.mouseEvent[initButton(1, Alt)] = eventProc[miMoving]
+  d.mouseEvent[initButton(3, Alt)] = eventProc[miResizing]
+  for scr in d.screens.mitems:
+    scr.statusBar = initStatusBar(scr.bounds.w.int, scr.barSize)
+
+  grabInputs(d)

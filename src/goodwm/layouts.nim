@@ -1,5 +1,6 @@
 import bumpy, cps
 import std/options
+import x11/xlib
 import types
 
 type
@@ -112,3 +113,26 @@ proc getLayout*(freeSpace: Rect, count: int, layout: ScreenLayout): LayoutIter =
       whelp layoutVerticalDown(freeSpace, count)
     of verticalUp:
       whelp layoutVerticalUp(freeSpace, count)
+
+
+func tiledWindows*(s: Workspace): int =
+  ## Counts the tiled windows
+  for w in s.windows:
+    if not w.isFloating:
+      inc result
+
+func layoutActive*(d: var Desktop) =
+  ## Calls the coresponding layout logic required
+  for scr in d.screens.mitems:
+    let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
+    if tiledWindowCount > 0:
+      {.noSideEffect.}: # I'm a liar and a scoundrel
+        let
+          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, 20)
+          layout = getLayout(freeSpace, tiledWindowCount, scr.layout)
+        for i, w in scr.getActiveWorkspace.windows:
+          if not w.isFloating:
+            let bounds = layout.getBounds()
+            scr.getActiveWorkspace.windows[i].bounds = bounds
+            discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
+                bounds.w.cuint, bounds.h.cuint)
