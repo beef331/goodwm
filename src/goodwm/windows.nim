@@ -30,6 +30,9 @@ func unMapWindows*(d: var Desktop) =
   for x in d.getActiveWorkspace.windows:
     discard XUnmapWindow(d.display, x.window)
 
+func unMapWindow*(d: Desktop, w: Window) =
+  discard XUnmapWindow(d.display, w)
+
 func mapWindows*(d: var Desktop) =
   for x in d.getActiveWorkspace.windows:
     discard XMapWindow(d.display, x.window)

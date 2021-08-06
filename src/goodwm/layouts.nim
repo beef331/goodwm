@@ -42,22 +42,22 @@ proc jield(c: LayoutIter, rect: Rect): LayoutIter {.cpsMagic.} =
   c.rect = some(rect)
   return c
 
-proc layoutVerticalUp(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+proc layoutVerticalUp(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
   if count == 0:
     jield freeSpace
   else:
     let
       width = freeSpace.w
-      height = freeSpace.h / count.float
+      height = freeSpace.h / count.float - padding.float * count.float
     var
       y = freeSpace.y + freeSpace.h
       i = 0
     while i < count:
       jield rect(freeSpace.x, y, width, height)
-      y -= height
+      y -= height + padding.float
       inc i
 
-proc layoutVerticalDown(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+proc layoutVerticalDown(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
   if count == 0:
     jield freeSpace
   else:
@@ -72,12 +72,16 @@ proc layoutVerticalDown(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
       y += height
       inc i
 
-proc layoutHorizontalRight(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+proc layoutHorizontalRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
   if count == 1:
     jield freeSpace
   else:
     let
-      width = freeSpace.w / count.float
+      width =
+        if padding > 0:
+          (freeSpace.w - (count.float - 1) * padding.float) / count.float
+        else:
+          (freeSpace.w.int div count).float
       height = freeSpace.h
     var
       x = freeSpace.x
@@ -85,9 +89,11 @@ proc layoutHorizontalRight(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
     while i < count:
       jield rect(x, freeSpace.y, width, height)
       x += width
+      if padding > 0:
+        x += padding.float
       inc i
 
-proc layoutHorizontalLeft(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
+proc layoutHorizontalLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
   if count == 1:
     jield freeSpace
   else:
@@ -102,17 +108,17 @@ proc layoutHorizontalLeft(freeSpace: Rect, count: int) {.cps: LayoutIter.} =
       x -= width
       inc i
 
-proc getLayout*(freeSpace: Rect, count: int, layout: ScreenLayout): LayoutIter =
+proc getLayout*(freeSpace: Rect, count, padding: int, layout: ScreenLayout): LayoutIter =
   result =
     case layout:
     of horizontalLeft:
-      whelp layoutHorizontalLeft(freeSpace, count)
+      whelp layoutHorizontalLeft(freeSpace, count, padding)
     of horizontalRight:
-      whelp layoutHorizontalRight(freeSpace, count)
+      whelp layoutHorizontalRight(freeSpace, count, padding)
     of verticalDown:
-      whelp layoutVerticalDown(freeSpace, count)
+      whelp layoutVerticalDown(freeSpace, count, padding)
     of verticalUp:
-      whelp layoutVerticalUp(freeSpace, count)
+      whelp layoutVerticalUp(freeSpace, count, padding)
 
 
 func tiledWindows*(s: Workspace): int =
@@ -128,8 +134,8 @@ func layoutActive*(d: var Desktop) =
     if tiledWindowCount > 0:
       {.noSideEffect.}: # I'm a liar and a scoundrel
         let
-          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, 20)
-          layout = getLayout(freeSpace, tiledWindowCount, scr.layout)
+          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, scr.margin)
+          layout = getLayout(freeSpace, tiledWindowCount, scr.padding, scr.layout)
         for i, w in scr.getActiveWorkspace.windows:
           if not w.isFloating:
             let bounds = layout.getBounds()

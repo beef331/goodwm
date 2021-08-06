@@ -3,10 +3,17 @@ import x11/[x, xlib]
 import sdl2/sdl, pixie
 type
   ScreenLayout* = enum
-    verticalDown, verticalUp, horizontalRight, horizontalLeft, #alternatingRight, alternatingLeft
+    verticalDown
+    verticalUp
+    horizontalRight
+    horizontalLeft
+    #alternatingRight, alternatingLeft
 
   StatusBarPos* = enum
-    sbpTop, sbpBot, sbpLeft, sbpRight
+    sbpTop = "top"
+    sbpBot = "bottom"
+    sbpLeft = "left"
+    sbpRight = "right"
 
   KeyEvent* = proc(d: var Desktop){.nimcall.}
   ButtonEvent* = proc(d: var Desktop, isReleased: bool)
@@ -100,28 +107,31 @@ type
     keClose = "close"
     keNextWorkspace = "nextworkspace"
     keLastWorkspace = "lastWorkspace"
+    keWindowToNextWorkspace = "windowToNextWorkspace"
+    keWindowToPrevWorkspace = "windowToPrevWorkspace"
 
 
   KeyConfig* = object
-    key*: Key
-    case isCommand*: bool
-    of true:
-      cmd*: string
-    else:
-      event*: KeyEvents
+    cmd*, inputs*: string
 
   ButtonConfig* = object
-    btn*: Button
-    event*: MouseInput
+    btn*, event*: string
 
   Widgets* = seq[Widget]
 
   Config* = object
-    screenLayouts*: seq[ScreenLayout]
-    screenStatusBarPos*: seq[StatusBarPos]
+    screenLayouts*: seq[string]
+    screenStatusBarPos*: seq[string]
     padding*, margin*, barSize*: int
+    backgroundColor*: string
+    foregroundColor*: string
+    accentColor*: string
+    borderColor*: string
+    fontColor*: string
+    startupCommands*: seq[string]
     keyShortcuts*: seq[KeyConfig]
     mouseShortcuts*: seq[ButtonConfig]
+
 
 
 

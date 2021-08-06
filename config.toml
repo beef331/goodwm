@@ -1,0 +1,92 @@
+screenLayouts = ["horizontalRight", "verticalDown", "horizontalRight"]
+screenStatusBarPos = ["top", "top", "top"]
+padding = 10
+margin = 10
+barSize = 30
+backgroundColor = "1f2430"
+foregroundColor = "cbccc6"
+accentColor = "ffcc66"
+borderColor = "101521"
+fontColor = "707a8c"
+startupCommands = []
+[[keyShortcuts]]
+  cmd = "rofi -show drun"
+  inputs = "p+Alt"
+
+[[keyShortcuts]]
+  cmd = "focusup"
+  inputs = "Alt+Left"
+
+[[keyShortcuts]]
+  cmd = "focusdown"
+  inputs = "Alt+Right"
+
+[[keyShortcuts]]
+  cmd = "moveup"
+  inputs = "Alt+Left+Shift"
+
+[[keyShortcuts]]
+  cmd = "moveDown"
+  inputs = "Alt+Right+Shift"
+
+[[keyShortcuts]]
+  cmd = "nextworkspace"
+  inputs = "Alt+Up"
+
+[[keyShortcuts]]
+  cmd = "lastWorkspace"
+  inputs = "Alt+Down"
+
+[[keyShortcuts]]
+  cmd = "windowToNextWorkspace"
+  inputs = "Alt+Shift+Up"
+
+[[keyShortcuts]]
+  cmd = "windowToPrevWorkspace"
+  inputs = "Alt+Shift+Down"
+
+[[keyShortcuts]]
+  cmd = "close"
+  inputs = "Alt+q"
+
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+
+[[mouseShortcuts]]
+  btn = ""
+  event = ""
+

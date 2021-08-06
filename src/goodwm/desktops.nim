@@ -2,7 +2,7 @@ import x11/[x, xinerama]
 import x11/xlib except Screen
 import std/[tables, osproc, options, strutils, decls, os, monotimes, times]
 import bumpy, vmath, statusbar
-import inputs, layouts, types, configs, windows
+import inputs, layouts, types, windows, notifications
 
 export windows
 
@@ -14,7 +14,14 @@ iterator buttons*(d: Desktop): Button =
   for x in d.mouseEvent.keys:
     yield x
 
-func killActiveWindow(d: var Desktop) =
+func cleanWorkspace(d: var Desktop) =
+  if d.getActiveWorkspace.windows.len == 0:
+    d.getActiveScreen.workspaces.delete(d.getActiveScreen.activeWorkspace)
+    var scr {.byaddr.} = d.getActiveScreen()
+    scr.activeWorkspace = min(scr.workspaces.high, scr.activeWorkspace)
+    d.mapWindows()
+
+func killActiveWindow*(d: var Desktop) =
   ## Closes the active window
   if d.activeWindow.isSome:
     discard XDestroyWindow(d.display, d.activeWindow.get)
@@ -30,7 +37,7 @@ func moveCursorToActive(d: var Desktop) =
 
     discard XWarpPointer(d.display, None, wnd.window, 0, 0, 0, 0, x, y)
 
-func moveUp(d: var Desktop) =
+func moveUp*(d: var Desktop) {.locks: 0.} =
   ## Moves active window up the stack of tiled windows
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -44,7 +51,7 @@ func moveUp(d: var Desktop) =
           d.moveCursorToActive
           break
 
-func moveDown(d: var Desktop) =
+func moveDown*(d: var Desktop) {.locks: 0.} =
   ## Moves active window down the stack of tiled windows
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -58,7 +65,7 @@ func moveDown(d: var Desktop) =
           d.moveCursorToActive
           break
 
-func focusUp(d: var Desktop) =
+func focusUp*(d: var Desktop) {.locks: 0.} =
   ## Focuses the window above the active one in the active screens stack
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -70,7 +77,7 @@ func focusUp(d: var Desktop) =
           d.moveCursorToActive
           break
 
-func focusDown(d: var Desktop) =
+func focusDown*(d: var Desktop) {.locks: 0.} =
   ## Focuses the window below the active one in the active screens stack
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -82,7 +89,7 @@ func focusDown(d: var Desktop) =
           d.moveCursorToActive
           break
 
-func toggleFloating(d: var Desktop) =
+func toggleFloating*(d: var Desktop) {.locks: 0.} =
   if d.activeWindow.isSome:
     d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
     let w = d.getActiveWindow.window
@@ -114,22 +121,66 @@ func scaleFloating(d: var Desktop, pos: Ivec2) =
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
     discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
-proc moveToNextActive*(d: var Desktop) =
+proc moveToNextWorkspace*(d: var Desktop) {.locks: 0.} =
+  var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
-  let scr = d.getActiveScreen
-  d.getActiveScreen.activeWorkspace = (scr.activeWorkspace + 1 +
-      scr.workSpaces.len) mod scr.workSpaces.len
+  let emptyWs = scr.getActiveWorkspace.windows.len == 0
+  if emptyWs and scr.activeWorkspace != scr.workspaces.high:
+    d.cleanWorkspace()
+  elif not emptyWs:
+    if scr.activeWorkspace == scr.workspaces.high:
+      scr.workspaces.add Workspace(active: 0)
+
+    inc scr.activeWorkspace
+
+  d.layoutActive()
   d.mapWindows()
 
-proc moveToLastActive*(d: var Desktop) =
+proc moveToLastWorkspace*(d: var Desktop) {.locks: 0.} =
+  var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
-  let scr = d.getActiveScreen
-  d.getActiveScreen.activeWorkspace = (scr.activeWorkspace - 1 +
-      scr.workSpaces.len) mod scr.workSpaces.len
+  let emptyWs = scr.getActiveWorkspace.windows.len == 0
+  if emptyWs and scr.activeWorkspace != 0:
+    d.cleanWorkspace()
+  elif not emptyWs:
+    if scr.activeWorkspace == 0:
+      scr.workspaces.insert(Workspace(active: 0), scr.activeWorkspace)
+    else:
+      dec scr.activeWorkspace
+
+  d.layoutActive()
   d.mapWindows()
 
 proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
+
+proc moveWindowToNextWorkspace*(d: var Desktop) {.locks: 0.} =
+  if d.activeWindow.isSome:
+    let wind = d.getActiveWindow
+    var scr {.byaddr.} = d.getActiveScreen()
+    d.getActiveWorkspace.windows.delete(d.getActiveWorkspace.active)
+    let newSpace = scr.activeWorkSpace + 1
+    if newSpace >= scr.workspaces.len:
+      scr.workspaces.add Workspace(active: 0, windows: @[wind])
+    else:
+      d.getActiveScreen.workspaces[newSpace].windows.add wind
+    d.unmapWindow(wind.window)
+    d.layoutActive()
+
+proc moveWindowToPrevWorkspace*(d: var Desktop) {.locks: 0.} =
+  if d.activeWindow.isSome:
+    let wind = d.getActiveWindow
+    var scr {.byaddr.} = d.getActiveScreen()
+    d.getActiveWorkspace.windows.delete(d.getActiveWorkspace.active)
+    let newSpace = scr.activeWorkSpace - 1
+    if newSpace < 0:
+      scr.workspaces.insert Workspace(active: 0, windows: @[wind]), 0
+      scr.activeWorkspace = 1
+    else:
+      scr.workspaces[newSpace].windows.add wind
+    d.unmapWindow(wind.window)
+    d.layoutActive()
+
 
 proc getScreens*(d: var Desktop) =
   d.screens.setLen(0)
@@ -144,7 +195,6 @@ proc getScreens*(d: var Desktop) =
     d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), barSize: 30,
         layout: horizontalRight)
   d.screens[0].isActive = true
-
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   ## On mouse motion assign the active window and change active screen
@@ -207,46 +257,3 @@ proc grabInputs*(d: var Desktop) =
         GrabModeASync, GrabModeAsync, None, None)
 
   discard XSelectInput(d.display, d.root, eventMask)
-
-proc loadConfig*(d: var Desktop) =
-  let conf = loadConfig()
-  #[
-  if conf.isSome:
-    let conf = conf.get
-
-    for x in d.screens.mitems:
-      x.margin = conf.margin
-      x.padding = conf.padding
-      x.barSize = conf.barSize
-
-    for i, x in conf.screenLayouts:
-      if i in 0..<d.screens.len:
-        d.screens[i].layout = x
-
-    for i, x in conf.screenStatusBarPos:
-      if i in 0..<d.screens.len:
-        d.screens[i].barPos = x
-  ]#
-  d.shortcuts[initKey(d.display, "p", Alt)] = initShortcut("rofi -show drun")
-  d.shortcuts[initKey(d.display, "q", Alt)] = initShortcut(killActiveWindow)
-  d.shortcuts[initKey(d.display, "f", Alt)] = initShortcut(toggleFloating)
-  d.shortcuts[initKey(d.display, "l", Alt)] = initShortcut(growWorkspace)
-  d.shortcuts[initKey(d.display, "Up", Alt)] = initShortcut(focusUp)
-  d.shortcuts[initKey(d.display, "Down", Alt)] = initShortcut(focusDown)
-  d.shortcuts[initKey(d.display, "Up", Alt or Shift)] = initShortcut(moveUp)
-  d.shortcuts[initKey(d.display, "Down", Alt or Shift)] = initShortcut(moveDown)
-  d.shortcuts[initKey(d.display, "Left", Alt or Shift)] = initShortcut(moveToLastActive)
-  d.shortcuts[initKey(d.display, "Right", Alt or Shift)] = initShortcut(moveToNextActive)
-
-  proc eventProc[T: static MouseInput](d: var Desktop, isReleased: bool) =
-    d.mouseState =
-      if isReleased:
-          miNone
-        else:
-          T
-  d.mouseEvent[initButton(1, Alt)] = eventProc[miMoving]
-  d.mouseEvent[initButton(3, Alt)] = eventProc[miResizing]
-  for scr in d.screens.mitems:
-    scr.statusBar = initStatusBar(scr.bounds.w.int, scr.barSize)
-
-  grabInputs(d)

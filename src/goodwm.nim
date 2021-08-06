@@ -1,6 +1,6 @@
 import x11/[xlib, x, xutil, xatom]
 import std/os
-import goodwm/[desktops, inputs, types]
+import goodwm/[desktops, inputs, types, configs]
 
 const
   XTrue = true.XBool
@@ -17,8 +17,8 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   discard XSelectInput(desktop.display, e.window, EnterWindowMask or
                                     LeaveWindowMask)
   discard XMapWindow(desktop.display, e.window)
-  discard XSetWindowBorderWidth(desktop.display, e.window, 3)
-  discard XSetWindowBorder(desktop.display, e.window, 1)
+  #discard XSetWindowBorderWidth(desktop.display, e.window, 3)
+  #discard XSetWindowBorder(desktop.display, e.window, 1)
   discard XFree(size)
 
 proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
@@ -62,7 +62,7 @@ proc run() =
     desktop = setup()
     barThrd: Thread[ptr Desktop]
   if desktop.display != nil:
-    desktop.loadConfig()
+    desktop.reloadConfig()
     createThread(barThrd, drawBars, desktop.addr)
     while true:
       while(XNextEvent(desktop.display, ev.addr) == 0):
