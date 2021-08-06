@@ -28,6 +28,8 @@ proc getKeySyms(s: string): (string, cuint) =
         return
       result[0] = sym
 
+proc reloadConfig*(d: var Desktop)
+
 func toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shortcut) =
   result[0] = initKey(display, sym, modi)
   result[1] =
@@ -35,7 +37,7 @@ func toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shor
       initShortcut:
         case parseEnum[KeyEvents](cmd)
         of keClose:
-          killActiveWindow
+          killActiveWindow.KeyEvent
         of keFocusUp:
           focusUp
         of keFocusDown:
@@ -50,8 +52,12 @@ func toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shor
           moveToLastWorkspace
         of keWindowToNextWorkspace:
           moveWindowToNextWorkspace
-        else:
+        of keWindowToPrevWorkspace:
           moveWindowToPrevWorkspace
+        of keReloadConfig:
+          reloadConfig
+        of keToggleFloating:
+          toggleFloating
     except:
       initShortcut(cmd)
 
@@ -101,5 +107,4 @@ proc loadConfig*(): Option[Config] =
 
 proc reloadConfig*(d: var Desktop) =
   setupConfig(d, loadConfig())
-  echo "loaded config"
   grabInputs(d)

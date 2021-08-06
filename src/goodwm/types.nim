@@ -109,6 +109,8 @@ type
     keLastWorkspace = "lastWorkspace"
     keWindowToNextWorkspace = "windowToNextWorkspace"
     keWindowToPrevWorkspace = "windowToPrevWorkspace"
+    keReloadConfig = "reloadConfig"
+    keToggleFloating = "toggleFloating"
 
 
   KeyConfig* = object

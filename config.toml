@@ -2,7 +2,7 @@ screenLayouts = ["horizontalRight", "verticalDown", "horizontalRight"]
 screenStatusBarPos = ["top", "top", "top"]
 padding = 10
 margin = 10
-barSize = 30
+barSize = 20
 backgroundColor = "1f2430"
 foregroundColor = "cbccc6"
 accentColor = "ffcc66"
@@ -49,6 +49,13 @@ startupCommands = []
   cmd = "close"
   inputs = "Alt+q"
 
+[[keyShortcuts]]
+  cmd = "reloadConfig"
+  inputs = "Alt+Shift+r"
+
+[[keyShortcuts]]
+  cmd = "toggleFloating"
+  inputs = "alt+f"
 
 [[mouseShortcuts]]
   btn = ""

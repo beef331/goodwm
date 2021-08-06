@@ -37,7 +37,7 @@ func moveCursorToActive(d: var Desktop) =
 
     discard XWarpPointer(d.display, None, wnd.window, 0, 0, 0, 0, x, y)
 
-func moveUp*(d: var Desktop) {.locks: 0.} =
+func moveUp*(d: var Desktop) =
   ## Moves active window up the stack of tiled windows
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -51,7 +51,7 @@ func moveUp*(d: var Desktop) {.locks: 0.} =
           d.moveCursorToActive
           break
 
-func moveDown*(d: var Desktop) {.locks: 0.} =
+func moveDown*(d: var Desktop) =
   ## Moves active window down the stack of tiled windows
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -65,7 +65,7 @@ func moveDown*(d: var Desktop) {.locks: 0.} =
           d.moveCursorToActive
           break
 
-func focusUp*(d: var Desktop) {.locks: 0.} =
+func focusUp*(d: var Desktop) =
   ## Focuses the window above the active one in the active screens stack
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -77,7 +77,7 @@ func focusUp*(d: var Desktop) {.locks: 0.} =
           d.moveCursorToActive
           break
 
-func focusDown*(d: var Desktop) {.locks: 0.} =
+func focusDown*(d: var Desktop) =
   ## Focuses the window below the active one in the active screens stack
   if d.activeWindow.isSome:
     var workspace {.byaddr.} = d.getActiveWorkspace
@@ -89,7 +89,7 @@ func focusDown*(d: var Desktop) {.locks: 0.} =
           d.moveCursorToActive
           break
 
-func toggleFloating*(d: var Desktop) {.locks: 0.} =
+func toggleFloating*(d: var Desktop) =
   if d.activeWindow.isSome:
     d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
     let w = d.getActiveWindow.window
@@ -121,7 +121,7 @@ func scaleFloating(d: var Desktop, pos: Ivec2) =
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
     discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
 
-proc moveToNextWorkspace*(d: var Desktop) {.locks: 0.} =
+proc moveToNextWorkspace*(d: var Desktop) =
   var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
   let emptyWs = scr.getActiveWorkspace.windows.len == 0
@@ -136,7 +136,7 @@ proc moveToNextWorkspace*(d: var Desktop) {.locks: 0.} =
   d.layoutActive()
   d.mapWindows()
 
-proc moveToLastWorkspace*(d: var Desktop) {.locks: 0.} =
+proc moveToLastWorkspace*(d: var Desktop) =
   var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
   let emptyWs = scr.getActiveWorkspace.windows.len == 0
@@ -154,7 +154,7 @@ proc moveToLastWorkspace*(d: var Desktop) {.locks: 0.} =
 proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
 
-proc moveWindowToNextWorkspace*(d: var Desktop) {.locks: 0.} =
+proc moveWindowToNextWorkspace*(d: var Desktop) =
   if d.activeWindow.isSome:
     let wind = d.getActiveWindow
     var scr {.byaddr.} = d.getActiveScreen()
@@ -167,7 +167,7 @@ proc moveWindowToNextWorkspace*(d: var Desktop) {.locks: 0.} =
     d.unmapWindow(wind.window)
     d.layoutActive()
 
-proc moveWindowToPrevWorkspace*(d: var Desktop) {.locks: 0.} =
+proc moveWindowToPrevWorkspace*(d: var Desktop) =
   if d.activeWindow.isSome:
     let wind = d.getActiveWindow
     var scr {.byaddr.} = d.getActiveScreen()
@@ -214,7 +214,9 @@ proc onKey*(d: var Desktop, key: Key) =
     let key = d.shortcuts[key]
     case key.kind
     of command:
-      discard startProcess(key.cmd, args = key.args, options = {poUsePath})
+      try:
+        discard startProcess(key.cmd, args = key.args, options = {poUsePath})
+      except: discard
     of function:
       if key.event != nil:
         key.event(d)
@@ -230,7 +232,7 @@ proc drawBars*(d: ptr Desktop) {.thread.} =
       let sbW = getXWindow(scr.statusbar)
       discard XMapWindow(d.display, sbW)
       discard XRaiseWindow(d.display, sbw)
-      discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, 30)
+      discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, scr.barSize.cuint)
       {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
         scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
             activeWorkspace: scr.activeWorkspace))
