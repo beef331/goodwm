@@ -1,5 +1,5 @@
 import bumpy, cps
-import std/options
+import std/[options, math]
 import x11/xlib
 import types
 
@@ -22,10 +22,10 @@ func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, barSize, margin: int): Rec
   of sbpRight:
     result.w -= barSize.float
 
-  result.x += margin / 2
-  result.y += margin / 2
-  result.w -= margin.float
-  result.h -= margin.float
+  result.x += margin.float
+  result.y += margin.float
+  result.w -= margin.float * 2
+  result.h -= margin.float * 2
 
 
 proc getBounds*(c: LayoutIter): Rect =
@@ -108,6 +108,61 @@ proc layoutHorizontalLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIte
       x -= width
       inc i
 
+proc layourAlterLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+  if count == 1:
+    jield freeSpace
+  else:
+    var
+      rect = freeSpace
+      i = 0
+    while i < count:
+      if i + 1 < count:
+        if i mod 2 == 0:
+          rect.w /= 2
+          rect.w -= padding.float / 2
+        else:
+          rect.h /= 2
+          rect.h -= padding.float / 2
+      jield rect
+
+      if i + 1 < count:
+        if i mod 2 == 0:
+          rect.x += rect.w + padding.float
+        else:
+          rect.y += rect.h + padding.float
+
+      inc i
+
+
+proc layourAlterRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+  if count == 1:
+    jield freeSpace
+  else:
+    var
+      rect = freeSpace
+      i = 0
+    while i < count:
+      if i + 1 < count:
+        if i mod 2 == 0:
+          rect.w /= 2
+          rect.w -= padding / 2
+        else:
+          rect.h /= 2
+          rect.h -= padding / 2
+      var properRect = rect
+      properRect.x = freeSpace.w - rect.x - rect.w + freespace.x * 2
+      {.warning: "Need to fix this weird offset on vertical splits".}
+      jield properRect
+
+      if i + 1 < count:
+        if i mod 2 == 0:
+          rect.x += rect.w + padding.float
+        else:
+          rect.y += rect.h + padding.float
+
+      inc i
+
+#
 proc getLayout*(freeSpace: Rect, count, padding: int, layout: ScreenLayout): LayoutIter =
   result =
     case layout:
@@ -119,6 +174,11 @@ proc getLayout*(freeSpace: Rect, count, padding: int, layout: ScreenLayout): Lay
       whelp layoutVerticalDown(freeSpace, count, padding)
     of verticalUp:
       whelp layoutVerticalUp(freeSpace, count, padding)
+    of alternateLeft:
+      whelp layourAlterLeft(freeSpace, count, padding)
+    of alternateRight:
+      whelp layourAlterRight(freeSpace, count, padding)
+
 
 
 func tiledWindows*(s: Workspace): int =

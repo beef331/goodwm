@@ -7,7 +7,8 @@ type
     verticalUp
     horizontalRight
     horizontalLeft
-    #alternatingRight, alternatingLeft
+    alternateLeft
+    alternateRight
 
   StatusBarPos* = enum
     sbpTop = "top"

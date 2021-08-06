@@ -2,10 +2,6 @@ import x11/[xlib, x, xutil, xatom]
 import std/os
 import goodwm/[desktops, inputs, types, configs]
 
-const
-  XTrue = true.XBool
-  XFalse = false.XBool
-
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   var
     size = XAllocSizeHints()
@@ -18,7 +14,7 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
                                     LeaveWindowMask)
   discard XMapWindow(desktop.display, e.window)
   #discard XSetWindowBorderWidth(desktop.display, e.window, 3)
-  #discard XSetWindowBorder(desktop.display, e.window, 1)
+  #discard XSetWindowBorder(desktop.display, e.window, 4)
   discard XFree(size)
 
 proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
