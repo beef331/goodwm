@@ -23,6 +23,9 @@ requires "notify >= 0.1.5"
 
 task demo, "Makes and tests the binary":
   exec "nimble build"
+  try:
+    exec "killall Xephyr"
+  except: discard
   exec "Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"
 
 task demor, "Makes and tests the binary":

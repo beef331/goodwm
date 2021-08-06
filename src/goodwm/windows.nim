@@ -41,7 +41,6 @@ func mouseEnter*(d: var Desktop, w: Window) =
   ## Mouse entered a new window, ensure it's not root,
   ## then make it active
   if w != d.root:
-    d.activeWindow = some(w)
     d.mouseState = miNone
     var i = 0
     for wind in d.getActiveWorkspace.windows.mitems:

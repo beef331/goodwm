@@ -57,6 +57,10 @@ startupCommands = []
   cmd = "toggleFloating"
   inputs = "alt+f"
 
+[[keyShortcuts]]
+  cmd = "kitty"
+  inputs = "alt+Return"
+
 [[mouseShortcuts]]
   btn = ""
   event = ""

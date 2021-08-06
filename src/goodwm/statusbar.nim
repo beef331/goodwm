@@ -47,7 +47,7 @@ proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
   result.height = height
   result.dir = dir
   result.img.fill(rgb(255, 255, 255))
-  result.widgets.add Widget(kind: wkWorkspace, size: 150, margin: 5)
+  result.widgets.add Widget(kind: wkWorkspace, margin: 5)
   result.widgets.add Widget(kind: wkTime)
 
 proc calcMaxOffset(bar: StatusBar, wid: Widget, pos: Vec2): Option[Vec2] =

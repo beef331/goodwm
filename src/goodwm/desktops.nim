@@ -21,11 +21,13 @@ func cleanWorkspace(d: var Desktop) =
     scr.activeWorkspace = min(scr.workspaces.high, scr.activeWorkspace)
     d.mapWindows()
 
+func hasActiveWindow(d: var Desktop): bool = d.getActiveWorkspace.active in
+    0..<d.getActiveWorkspace.windows.len
+
 func killActiveWindow*(d: var Desktop) =
   ## Closes the active window
-  if d.activeWindow.isSome:
-    discard XDestroyWindow(d.display, d.activeWindow.get)
-    d.activeWindow = none(Window)
+  if d.hasActiveWindow:
+    discard XDestroyWindow(d.display, d.getActiveWindow.window)
 
 func moveCursorToActive(d: var Desktop) =
   ## Moves the cursor to the active window
@@ -39,7 +41,7 @@ func moveCursorToActive(d: var Desktop) =
 
 func moveUp*(d: var Desktop) =
   ## Moves active window up the stack of tiled windows
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
@@ -47,13 +49,12 @@ func moveUp*(d: var Desktop) =
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
           d.layoutActive
-          d.activeWindow = some(workspace.windows[j].window)
           d.moveCursorToActive
           break
 
 func moveDown*(d: var Desktop) =
   ## Moves active window down the stack of tiled windows
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
@@ -61,36 +62,33 @@ func moveDown*(d: var Desktop) =
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
           d.layoutActive
-          d.activeWindow = some(workspace.windows[j].window)
           d.moveCursorToActive
           break
 
 func focusUp*(d: var Desktop) =
   ## Focuses the window above the active one in the active screens stack
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
         if not workspace.windows[j].isFloating:
           workspace.active = j
-          d.activeWindow = some(workspace.windows[j].window)
           d.moveCursorToActive
           break
 
 func focusDown*(d: var Desktop) =
   ## Focuses the window below the active one in the active screens stack
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
         if not workspace.windows[j].isFloating:
           workspace.active = j
-          d.activeWindow = some(workspace.windows[j].window)
           d.moveCursorToActive
           break
 
 func toggleFloating*(d: var Desktop) =
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
     let w = d.getActiveWindow.window
     if d.getActiveWindow.isFloating:
@@ -108,7 +106,7 @@ func moveFloating(d: var Desktop, pos: Ivec2) =
       w = windowBounds.w.cuint
       h = windowBounds.h.cuint
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
-    discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
+    discard XMoveResizeWindow(d.display, d.getActiveWindow.window, x, y, w, h)
 
 func scaleFloating(d: var Desktop, pos: Ivec2) =
   if d.hasActiveWindow and d.getActiveWindow.isFloating:
@@ -119,9 +117,10 @@ func scaleFloating(d: var Desktop, pos: Ivec2) =
       x = windowBounds.x.cint
       y = windowBounds.y.cint
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
-    discard XMoveResizeWindow(d.display, d.activeWindow.get, x, y, w, h)
+    discard XMoveResizeWindow(d.display, d.getActiveWindow.window, x, y, w, h)
 
 proc moveToNextWorkspace*(d: var Desktop) =
+  d.getActiveWorkspace.active = -1
   var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
   let emptyWs = scr.getActiveWorkspace.windows.len == 0
@@ -137,6 +136,7 @@ proc moveToNextWorkspace*(d: var Desktop) =
   d.mapWindows()
 
 proc moveToLastWorkspace*(d: var Desktop) =
+  d.getActiveWorkspace.active = -1
   var scr {.byaddr.} = d.getActiveScreen
   d.unmapWindows()
   let emptyWs = scr.getActiveWorkspace.windows.len == 0
@@ -155,7 +155,7 @@ proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
 
 proc moveWindowToNextWorkspace*(d: var Desktop) =
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     let wind = d.getActiveWindow
     var scr {.byaddr.} = d.getActiveScreen()
     d.getActiveWorkspace.windows.delete(d.getActiveWorkspace.active)
@@ -168,7 +168,7 @@ proc moveWindowToNextWorkspace*(d: var Desktop) =
     d.layoutActive()
 
 proc moveWindowToPrevWorkspace*(d: var Desktop) =
-  if d.activeWindow.isSome:
+  if d.hasActiveWindow:
     let wind = d.getActiveWindow
     var scr {.byaddr.} = d.getActiveScreen()
     d.getActiveWorkspace.windows.delete(d.getActiveWorkspace.active)

@@ -60,7 +60,6 @@ type
     root*: x.Window
     screen*: cint
     screens*: seq[Screen]
-    activeWindow*: Option[x.Window]
     shortcuts*: Table[Key, Shortcut]
     mouseState*: MouseInput
     mouseEvent*: Table[Button, ButtonEvent]

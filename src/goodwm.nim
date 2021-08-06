@@ -48,11 +48,12 @@ proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint {.cdecl.} =
 proc setup(): Desktop =
   template display: PDisplay = result.display
   display = XOpenDisplay(nil)
-  result.screen = DefaultScreen(display)
-  result.root = RootWindow(display, result.screen)
+  if display != nil:
+    result.screen = DefaultScreen(display)
+    result.root = RootWindow(display, result.screen)
 
-  discard XSetErrorHandler(errorHandler)
-  result.getScreens()
+    discard XSetErrorHandler(errorHandler)
+    result.getScreens()
 
 proc run() =
   ##The main loop, it's main.
