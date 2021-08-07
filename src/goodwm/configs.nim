@@ -28,36 +28,42 @@ proc getKeySyms(s: string): (string, cuint) =
         return
       result[0] = sym
 
+proc getButtonSyms(s: string): (int, cuint) =
+  for sym in s.extractSyms:
+    case sym.toLower
+    of "alt", "Alt":
+      result[1] = result[1] or Alt
+    of "shift", "Shift":
+      result[1] = result[1] or Shift
+    of "super", "Super":
+      result[1] = result[1] or Mod4Mask
+    else:
+      result[0] = parseint(sym)
+
 proc reloadConfig*(d: var Desktop)
 
-func toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shortcut) =
+let
+  KeyTable = [
+    keFocusUp: focusUp.KeyEvent,
+    keFocusDown: focusDown,
+    keMoveUp: moveUp,
+    keMoveDown: moveDown,
+    keClose: killActiveWindow,
+    keNextWorkspace: moveToNextWorkspace,
+    keLastWorkspace: movetoLastWorkspace,
+    keWindowToNextWorkSpace: moveWindowToNextWorkspace,
+    keWindowToPrevWorkSpace: moveWindowToPrevWorkspace,
+    keReloadConfig: reloadConfig,
+    keToggleFloating: toggleFloating
+  ]
+
+
+
+proc toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shortcut) =
   result[0] = initKey(display, sym, modi)
   result[1] =
     try:
-      initShortcut:
-        case parseEnum[KeyEvents](cmd)
-        of keClose:
-          killActiveWindow.KeyEvent
-        of keFocusUp:
-          focusUp
-        of keFocusDown:
-          focusDown
-        of keMoveUp:
-          moveUp
-        of keMoveDown:
-          moveDown
-        of keNextWorkspace:
-          moveToNextWorkspace
-        of keLastWorkspace:
-          moveToLastWorkspace
-        of keWindowToNextWorkspace:
-          moveWindowToNextWorkspace
-        of keWindowToPrevWorkspace:
-          moveWindowToPrevWorkspace
-        of keReloadConfig:
-          reloadConfig
-        of keToggleFloating:
-          toggleFloating
+      initShortcut(KeyTable[parseEnum[KeyEvents](cmd)])
     except:
       initShortcut(cmd)
 
@@ -85,6 +91,22 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
           d.screens[i].barPos = parseEnum[StatusBarPos](x)
         except Exception as e:
           sendConfigError(e.msg)
+
+    for i, x in conf.mouseShortcuts:
+      let
+        (btn, modi) =
+          try:
+              x.btn.getButtonSyms
+            except:
+              sendConfigError(fmt"{x.btn} is not a valid input")
+              continue
+        event =
+          try:
+              parseEnum[MouseInput](x.event)
+            except:
+              sendConfigError(fmt"{x.event} is not a valid mouse action.")
+              continue
+      d.mouseEvent[initButton(btn, modi)] = event
 
     for key in conf.keyShortcuts:
       block findKey:

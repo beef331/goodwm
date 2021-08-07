@@ -17,7 +17,6 @@ type
     sbpRight = "right"
 
   KeyEvent* = proc(d: var Desktop){.nimcall.}
-  ButtonEvent* = proc(d: var Desktop, isReleased: bool)
 
   ManagedWindow* = object
     isFloating*: bool
@@ -60,10 +59,11 @@ type
     display*: PDisplay
     root*: x.Window
     screen*: cint
+    mouseXOffset*, mouseYOffset*: int
     screens*: seq[Screen]
     shortcuts*: Table[Key, Shortcut]
     mouseState*: MouseInput
-    mouseEvent*: Table[Button, ButtonEvent]
+    mouseEvent*: Table[Button, MouseInput]
 
   Key* = object
     code*: cuint

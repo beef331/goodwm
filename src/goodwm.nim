@@ -27,10 +27,10 @@ proc onKeyPress(desktop: var Desktop, e: XKeyEvent) =
 proc onKeyRelease(desktop: var Desktop, e: XKeyEvent) = discard
 
 proc onButtonPressed(desktop: var Desktop, e: XButtonEvent) =
-  desktop.onButton(initButton(e.button, e.state), false)
+  desktop.onButton(initButton(e.button, e.state), true, e.x, e.y)
 
 proc onButtonReleased(desktop: var Desktop, e: XButtonEvent) =
-  desktop.onButton(initButton(e.button, e.state), true)
+  desktop.onButton(initButton(e.button, e.state), false, 0, 0)
 
 proc onEnter(desktop: var Desktop, e: XCrossingEvent) = desktop.mouseEnter(e.window)
 

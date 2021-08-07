@@ -62,42 +62,10 @@ startupCommands = []
   inputs = "alt+Return"
 
 [[mouseShortcuts]]
-  btn = ""
-  event = ""
+  btn = "alt+3"
+  event = "resize"
 
 [[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
-
-[[mouseShortcuts]]
-  btn = ""
-  event = ""
+  btn = "alt+1"
+  event = "move"
 

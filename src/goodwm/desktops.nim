@@ -101,8 +101,8 @@ func moveFloating(d: var Desktop, pos: Ivec2) =
   if d.hasActiveWindow and d.getActiveWindow.isFloating:
     let
       windowBounds = d.getActiveWindow.bounds
-      x = (pos.x - windowBounds.w.int div 2).cint
-      y = (pos.y - windowBounds.h.int div 2).cint
+      x = (pos.x - d.mouseXOffset).cint
+      y = (pos.y - d.mouseYOffset).cint
       w = windowBounds.w.cuint
       h = windowBounds.h.cuint
     d.getActiveWindow.bounds = rect(x.float, y.float, w.float, h.float)
@@ -221,10 +221,16 @@ proc onKey*(d: var Desktop, key: Key) =
       if key.event != nil:
         key.event(d)
 
-proc onButton*(d: var Desktop, btn: Button, pressed: bool) =
+proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
   if btn in d.mouseEvent:
-    let btn = d.mouseEvent[btn]
-    btn(d, pressed)
+    let shortcut = d.mouseEvent[btn]
+    if pressed:
+      d.mouseState = shortcut
+      if d.hasActiveWindow:
+        d.mouseXOffset = x - d.getActiveWindow.bounds.x.int
+        d.mouseYOffset = y - d.getActiveWindow.bounds.y.int
+    elif d.mouseState == shortcut:
+      d.mouseState = miNone
 
 proc drawBars*(d: ptr Desktop) {.thread.} =
   while true:
@@ -255,6 +261,7 @@ proc grabInputs*(d: var Desktop) =
     discard XGrabKey(d.display, key.code.cint, key.modi, d.root, false.XBool, GrabModeAsync, GrabModeAsync)
 
   for btn in d.buttons:
+    echo btn
     discard XGrabButton(d.display, btn.btn.cuint, btn.modi, d.root, false.XBool, mouseMask,
         GrabModeASync, GrabModeAsync, None, None)
 
