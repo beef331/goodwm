@@ -1,7 +1,7 @@
 import pixie
 import x11/x
 import std/[times, osproc, options]
-import sdl2/[sdl, sdl_syswm]
+import sdl2nim/[sdl, sdl_syswm]
 import types
 
 const
@@ -18,7 +18,6 @@ font.size = 15
 
 proc display(sb: StatusBar) =
   # update texture with new pixels from surface
-
   var dataPtr = sb.img.data[0].unsafeaddr
   let
     mainSurface = createRGBSurfaceFrom(dataPtr, cint sb.width, cint sb.height, cint 32, cint 4 *
@@ -38,8 +37,8 @@ proc getXWindow*(sb: StatusBar): x.Window =
   else:
     debugecho "Cannot get info"
 
-proc initStatusBar*(width, height: int, dir = sbdRight): StatusBar =
-  discard init(InitVideo)
+proc updateStatusBar*(result: var StatusBar, width, height: int, dir = sbdRight) =
+  result.widgets.setLen(0)
   result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, WindowShown)
   result.renderer = createRenderer(result.window, -1, RendererAccelerated)
   result.img = newImage(width, height)

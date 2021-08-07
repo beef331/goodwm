@@ -63,11 +63,15 @@ proc toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shor
   result[0] = initKey(display, sym, modi)
   result[1] =
     try:
-      initShortcut(KeyTable[parseEnum[KeyEvents](cmd)])
+      let enm = parseEnum[KeyEvents](cmd)
+      case enm
+      of KeyTable.low..KeyTable.high:
+        initShortcut(KeyTable[enm])
+      of keMoveToScreen:
+        let id = parseInt(sym)
+        initShortcut(id)
     except:
       initShortcut(cmd)
-
-
 
 proc setupConfig*(d: var Desktop, config: Option[Config]) =
   if config.isSome:
@@ -116,7 +120,7 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
           d.shortcuts[key] = shortcut
 
   for scr in d.screens.mitems:
-    scr.statusbar = initStatusBar(scr.bounds.w.int, scr.barSize)
+    scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
 
 proc loadConfig*(): Option[Config] =
   for x in configPaths:
@@ -125,8 +129,10 @@ proc loadConfig*(): Option[Config] =
         let a = Toml.decode(x.readFile, Config)
         return some(a)
       except Exception as e:
-        echo e.msg
+        sendConfigError(e.msg)
 
 proc reloadConfig*(d: var Desktop) =
+  d.mouseEvent.clear()
+  d.shortcuts.clear()
   setupConfig(d, loadConfig())
   grabInputs(d)

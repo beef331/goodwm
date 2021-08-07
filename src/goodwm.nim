@@ -1,4 +1,4 @@
-import x11/[xlib, x, xutil, xatom]
+import x11/[xlib, x, xutil, xatom], sdl2nim/sdl
 import std/os
 import goodwm/[desktops, inputs, types, configs]
 
@@ -50,6 +50,7 @@ proc setup(): Desktop =
 
     discard XSetErrorHandler(errorHandler)
     result.getScreens()
+    discard init(InitVideo)
 
 proc run() =
   ##The main loop, it's main.
@@ -57,7 +58,7 @@ proc run() =
   var
     ev: XEvent = XEvent()
     desktop = setup()
-    barThrd: Thread[ptr Desktop]
+    barThrd: system.Thread[ptr Desktop]
   if desktop.display != nil:
     desktop.reloadConfig()
     createThread(barThrd, drawBars, desktop.addr)

@@ -40,7 +40,7 @@ type
     workSpaces*: seq[Workspace]
 
   ShortcutKind* = enum
-    command, function
+    command, function, moveWindowToScreen
 
   Shortcut* = object
     case kind*: ShortcutKind
@@ -49,6 +49,8 @@ type
       args*: seq[string]
     of function:
       event*: KeyEvent
+    of moveWindowToScreen:
+      targetScreen*: int
 
   MouseInput* = enum
     miNone = "none"
@@ -111,6 +113,7 @@ type
     keWindowToPrevWorkspace = "windowToPrevWorkspace"
     keReloadConfig = "reloadConfig"
     keToggleFloating = "toggleFloating"
+    keMoveToScreen = "moveToScreen"
 
 
   KeyConfig* = object
@@ -133,9 +136,6 @@ type
     startupCommands*: seq[string]
     keyShortcuts*: seq[KeyConfig]
     mouseShortcuts*: seq[ButtonConfig]
-
-
-
 
 {.push inline.}
 func getActiveScreen*(d: var Desktop): var Screen =

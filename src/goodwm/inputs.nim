@@ -24,3 +24,6 @@ func initShortcut*(cmd: string): Shortcut =
   let cmd = args[0]
   args = args[1..^1]
   Shortcut(kind: command, cmd: cmd, args: args)
+
+func initShortcut*(ind: int): Shortcut =
+  Shortcut(kind: moveWindowToScreen, targetScreen: ind)

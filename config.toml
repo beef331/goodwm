@@ -69,3 +69,7 @@ startupCommands = []
   btn = "alt+1"
   event = "move"
 
+[[keyShortcuts]]
+  cmd = "moveToScreen"
+  inputs = "Alt+1"
+

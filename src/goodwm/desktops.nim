@@ -209,6 +209,12 @@ func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   of miMoving:
     d.moveFloating(ivec2(x, y))
 
+proc moveActiveWindowToScreen(d: var Desktop, i: int) =
+  if i in 0..<d.screens.len:
+    let wind = d.getActiveWindow()
+    d.del(wind.window)
+    d.screens[i].getActiveWorkspace.windows.add wind
+
 proc onKey*(d: var Desktop, key: Key) =
   if key in d.shortcuts:
     let key = d.shortcuts[key]
@@ -220,6 +226,8 @@ proc onKey*(d: var Desktop, key: Key) =
     of function:
       if key.event != nil:
         key.event(d)
+    of moveWindowToScreen:
+      d.moveActiveWindowToScreen(key.targetScreen)
 
 proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
   if btn in d.mouseEvent:
@@ -245,24 +253,27 @@ proc drawBars*(d: ptr Desktop) {.thread.} =
     sleep(100)
 
 proc grabInputs*(d: var Desktop) =
-  const
-    eventMask = StructureNotifyMask or
-                SubstructureRedirectMask or
-                SubstructureNotifyMask or
-                ButtonPressMask or
-                PointerMotionMask or
-                EnterWindowMask or
-                LeaveWindowMask or
-                PropertyChangeMask or
-                KeyPressMask or
-                KeyReleaseMask
-    mouseMask = ButtonMotionMask or ButtonPressMask or ButtonReleaseMask
+  discard XUngrabKey(d.display, AnyKey, AnyModifier, d.root)
+  discard XUngrabButton(d.display, AnyButton, AnyModifier, d.root)
+
+  const mouseMask = ButtonMotionMask or ButtonPressMask or ButtonReleaseMask
+
+
   for key in d.keys:
     discard XGrabKey(d.display, key.code.cint, key.modi, d.root, false.XBool, GrabModeAsync, GrabModeAsync)
 
   for btn in d.buttons:
-    echo btn
     discard XGrabButton(d.display, btn.btn.cuint, btn.modi, d.root, false.XBool, mouseMask,
         GrabModeASync, GrabModeAsync, None, None)
 
+  const eventMask = StructureNotifyMask or
+                    SubstructureRedirectMask or
+                    SubstructureNotifyMask or
+                    ButtonPressMask or
+                    PointerMotionMask or
+                    EnterWindowMask or
+                    LeaveWindowMask or
+                    PropertyChangeMask or
+                    KeyPressMask or
+                    KeyReleaseMask
   discard XSelectInput(d.display, d.root, eventMask)
