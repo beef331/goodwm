@@ -1,5 +1,5 @@
 import x11/[xlib, x, xutil, xatom], sdl2nim/sdl
-import std/os
+import std/[os, selectors]
 import goodwm/[desktops, inputs, types, configs]
 
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
@@ -59,6 +59,10 @@ proc run() =
     desktop = setup()
   if desktop.display != nil:
     desktop.reloadConfig()
+    let
+      selector = newSelector[pointer]()
+      displayFile = ConnectionNumber(desktop.display).int
+    selector.registerHandle(displayFile, {Read}, nil)
     while true:
       desktop.drawBars()
       while(XPending(desktop.display) > 0):
@@ -86,6 +90,7 @@ proc run() =
           desktop.onPropertyChanged(ev.xproperty)
         of ClientMessage: discard
         else: discard
+      discard selector.select(100)
   else:
     echo "Cannot open X display"
 
