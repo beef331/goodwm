@@ -54,16 +54,15 @@ proc setup(): Desktop =
 
 proc run() =
   ##The main loop, it's main.
-  discard XInitThreads()
   var
     ev: XEvent = XEvent()
     desktop = setup()
-    barThrd: system.Thread[ptr Desktop]
   if desktop.display != nil:
     desktop.reloadConfig()
-    createThread(barThrd, drawBars, desktop.addr)
     while true:
-      while(XNextEvent(desktop.display, ev.addr) == 0):
+      desktop.drawBars()
+      while(XPending(desktop.display) > 0):
+        discard XNextEvent(desktop.display, ev.addr)
         case (ev.theType):
         of DestroyNotify:
           desktop.onWindowDestroy(ev.xdestroywindow)

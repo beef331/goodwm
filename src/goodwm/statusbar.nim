@@ -38,16 +38,15 @@ proc getXWindow*(sb: StatusBar): x.Window =
     debugecho "Cannot get info"
 
 proc updateStatusBar*(result: var StatusBar, width, height: int, dir = sbdRight) =
-  result.widgets.setLen(0)
-  result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, WindowShown)
-  result.renderer = createRenderer(result.window, -1, RendererAccelerated)
+  if result.window.isNil:
+    result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, 0)
+    result.renderer = createRenderer(result.window, 0, 0)
   result.img = newImage(width, height)
   result.width = width
   result.height = height
   result.dir = dir
   result.img.fill(rgb(255, 255, 255))
-  result.widgets.add Widget(kind: wkWorkspace, margin: 5)
-  result.widgets.add Widget(kind: wkTime)
+  result.widgets = @[Widget(kind: wkWorkspace, margin: 5), Widget(kind: wkTime)]
 
 proc calcMaxOffset(bar: StatusBar, wid: Widget, pos: Vec2): Option[Vec2] =
   if wid.size > 0:
@@ -103,6 +102,7 @@ proc drawCommand(bar: StatusBar, command: string, pos: var Vec2) =
   bar.img.fillText(font, msg, pos)
 
 proc drawBar*(bar: StatusBar, data: StatusBarData) =
+  pumpEvents()
   var pos = vec2(0, 0)
   bar.img.fill(bg)
   for i, widg in bar.widgets:

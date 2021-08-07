@@ -181,7 +181,6 @@ proc moveWindowToPrevWorkspace*(d: var Desktop) =
     d.unmapWindow(wind.window)
     d.layoutActive()
 
-
 proc getScreens*(d: var Desktop) =
   d.screens.setLen(0)
   let dis = d.display
@@ -240,17 +239,15 @@ proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
     elif d.mouseState == shortcut:
       d.mouseState = miNone
 
-proc drawBars*(d: ptr Desktop) {.thread.} =
-  while true:
-    for scr in d[].screens:
-      let sbW = getXWindow(scr.statusbar)
-      discard XMapWindow(d.display, sbW)
-      discard XRaiseWindow(d.display, sbw)
-      discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, scr.barSize.cuint)
-      {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
-        scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
-            activeWorkspace: scr.activeWorkspace))
-    sleep(100)
+proc drawBars*(d: var Desktop) =
+  for scr in d.screens:
+    let sbW = getXWindow(scr.statusbar)
+    discard XMapWindow(d.display, sbW)
+    discard XRaiseWindow(d.display, sbw)
+    discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, scr.barSize.cuint)
+    {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
+      scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
+          activeWorkspace: scr.activeWorkspace))
 
 proc grabInputs*(d: var Desktop) =
   discard XUngrabKey(d.display, AnyKey, AnyModifier, d.root)

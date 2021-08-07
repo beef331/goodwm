@@ -1,4 +1,4 @@
-import types, notifications, inputs, statusbar, desktops
+import types, notifications, inputs, statusbar, desktops, layouts
 import toml_serialization
 import std/[os, options, strutils, parseutils, strformat, tables]
 import x11/[xlib, x]
@@ -136,3 +136,4 @@ proc reloadConfig*(d: var Desktop) =
   d.shortcuts.clear()
   setupConfig(d, loadConfig())
   grabInputs(d)
+  d.layoutActive()

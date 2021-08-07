@@ -98,14 +98,20 @@ proc layoutHorizontalLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIte
     jield freeSpace
   else:
     let
-      width = freeSpace.w / count.float
+      width =
+        if padding > 0:
+          (freeSpace.w - (count.float - 1) * padding.float) / count.float
+        else:
+          (freeSpace.w.int div count).float
       height = freeSpace.h
     var
-      x = freeSpace.x + freeSpace.w
+      x = freeSpace.w - width + freeSpace.x
       i = 0
     while i < count:
       jield rect(x, freeSpace.y, width, height)
       x -= width
+      if padding > 0:
+        x -= padding.float
       inc i
 
 proc layourAlterLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
