@@ -5,6 +5,7 @@ const
   Alt* = Mod1Mask
   Super* = Mod4Mask
   Shift* = ShiftMask
+  Control* = ControlMask
 
 func initKey*(d: PDisplay, key: string, mods: cuint): Key =
   let
@@ -25,5 +26,5 @@ func initShortcut*(cmd: string): Shortcut =
   args = args[1..^1]
   Shortcut(kind: command, cmd: cmd, args: args)
 
-func initShortcut*(ind: int): Shortcut =
-  Shortcut(kind: moveWindowToScreen, targetScreen: ind)
+func initShortcut*(kind: TargettedShortcuts, ind: int): Shortcut =
+  result = Shortcut(kind: kind, targetScreen: ind)

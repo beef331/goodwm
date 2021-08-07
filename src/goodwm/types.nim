@@ -1,4 +1,4 @@
-import std/[tables, options]
+import std/tables
 import x11/[x, xlib]
 import sdl2/sdl, pixie
 type
@@ -16,7 +16,6 @@ type
     sbpLeft = "left"
     sbpRight = "right"
 
-  KeyEvent* = proc(d: var Desktop){.nimcall.}
 
   ManagedWindow* = object
     isFloating*: bool
@@ -26,6 +25,17 @@ type
   Workspace* = object
     active*: int
     windows*: seq[ManagedWindow]
+
+  StatusBarDirection* = enum
+    sbdLeft, sbdRight, sbdDown, sbdUp
+
+  StatusBar* = object
+    width*, height*: int
+    img*: Image
+    renderer*: Renderer
+    window*: sdl.Window
+    widgets*: Widgets
+    dir*: StatusBarDirection
 
   Screen* = object
     isActive*: bool
@@ -39,8 +49,31 @@ type
     layout*: ScreenLayout
     workSpaces*: seq[Workspace]
 
+  WidgetKind* = enum
+    wkWorkspace, wkTime, wkCommand
+
+  Widget* = object
+    size*: int
+    margin*: int
+    case kind*: WidgetKind
+    of wkCommand:
+      cmd*: string
+    else: discard
+
+  Widgets* = seq[Widget]
+
   ShortcutKind* = enum
-    command, function, moveWindowToScreen
+    command
+    function
+    moveWindowToScreen
+    forwardCarouselScreen
+    backCarouselScreen
+    forwardCarouselActive
+    backCarouselActive
+
+  TargettedShortcuts* = moveWindowToScreen .. backCarouselActive
+
+  KeyEvent* = proc(d: var Desktop){.nimcall.}
 
   Shortcut* = object
     case kind*: ShortcutKind
@@ -49,7 +82,7 @@ type
       args*: seq[string]
     of function:
       event*: KeyEvent
-    of moveWindowToScreen:
+    of TargettedShortcuts.low .. TargettedShortcuts.high:
       targetScreen*: int
 
   MouseInput* = enum
@@ -75,67 +108,11 @@ type
     btn*: range[1..5]
     modi*: cuint
 
-  StatusBarDirection* = enum
-    sbdLeft, sbdRight, sbdDown, sbdUp
-
-  StatusBar* = object
-    width*, height*: int
-    img*: Image
-    renderer*: Renderer
-    window*: sdl.Window
-    widgets*: Widgets
-    dir*: StatusBarDirection
-
-  WidgetKind* = enum
-    wkWorkspace, wkTime, wkCommand
-
-  Widget* = object
-    size*: int
-    margin*: int
-    case kind*: WidgetKind
-    of wkCommand:
-      cmd*: string
-    else: discard
-
   StatusBarData* = object
     openWorkspaces*: int
     activeWorkspace*: int
 
-  KeyEvents* = enum
-    keFocusUp = "focusup"
-    keFocusDown = "focusdown"
-    keMoveUp = "moveup"
-    keMoveDown = "movedown"
-    keClose = "close"
-    keNextWorkspace = "nextworkspace"
-    keLastWorkspace = "lastWorkspace"
-    keWindowToNextWorkspace = "windowToNextWorkspace"
-    keWindowToPrevWorkspace = "windowToPrevWorkspace"
-    keReloadConfig = "reloadConfig"
-    keToggleFloating = "toggleFloating"
-    keMoveToScreen = "moveToScreen"
 
-
-  KeyConfig* = object
-    cmd*, inputs*: string
-
-  ButtonConfig* = object
-    btn*, event*: string
-
-  Widgets* = seq[Widget]
-
-  Config* = object
-    screenLayouts*: seq[string]
-    screenStatusBarPos*: seq[string]
-    padding*, margin*, barSize*: int
-    backgroundColor*: string
-    foregroundColor*: string
-    accentColor*: string
-    borderColor*: string
-    fontColor*: string
-    startupCommands*: seq[string]
-    keyShortcuts*: seq[KeyConfig]
-    mouseShortcuts*: seq[ButtonConfig]
 
 {.push inline.}
 func getActiveScreen*(d: var Desktop): var Screen =

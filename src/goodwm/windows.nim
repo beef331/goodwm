@@ -1,6 +1,5 @@
 import types, layouts
 import bumpy
-import options
 import x11/xlib except Screen
 import x11/x
 

@@ -1,8 +1,8 @@
 import x11/[x, xinerama]
 import x11/xlib except Screen
-import std/[tables, osproc, options, strutils, decls, os, monotimes, times]
+import std/[tables, osproc, decls]
 import bumpy, vmath, statusbar
-import inputs, layouts, types, windows, notifications
+import layouts, types, windows
 
 export windows
 
@@ -151,6 +151,27 @@ proc moveToLastWorkspace*(d: var Desktop) =
   d.layoutActive()
   d.mapWindows()
 
+proc carouselScreenForward*(d: var Desktop, id: int) =
+  if id in 0..<d.screens.len:
+    var scr {.byaddr.} = d.screens[id]
+    d.unmapWindows()
+    let emptyWs = scr.getActiveWorkspace.windows.len == 0
+    if emptyWs:
+      d.cleanWorkspace()
+    scr.activeWorkspace = (scr.activeWorkspace + 1 + scr.workspaces.len) mod scr.workspaces.len
+    d.layoutActive()
+    d.mapWindows()
+proc carouselScreenBackward*(d: var Desktop, id: int) =
+  if id in 0..<d.screens.len:
+    var scr {.byaddr.} = d.screens[id]
+    d.unmapWindows()
+    let emptyWs = scr.getActiveWorkspace.windows.len == 0
+    if emptyWs:
+      d.cleanWorkspace()
+    scr.activeWorkspace = (scr.activeWorkspace - 1 + scr.workspaces.len) mod scr.workspaces.len
+    d.layoutActive()
+    d.mapWindows()
+
 proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
 
@@ -227,6 +248,21 @@ proc onKey*(d: var Desktop, key: Key) =
         key.event(d)
     of moveWindowToScreen:
       d.moveActiveWindowToScreen(key.targetScreen)
+    of forwardCarouselScreen:
+      d.carouselScreenForward(key.targetScreen)
+    of backCarouselScreen:
+      d.carouselScreenBackward(key.targetScreen)
+    of forwardCarouselActive:
+      for i, x in d.screens:
+        if x.isActive:
+          d.carouselScreenForward(i)
+          break
+    of backCarouselActive:
+      for i, x in d.screens:
+        if x.isActive:
+          d.carouselScreenBackward(i)
+          break
+
 
 proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
   if btn in d.mouseEvent:

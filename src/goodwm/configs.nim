@@ -2,7 +2,45 @@ import types, notifications, inputs, statusbar, desktops, layouts
 import toml_serialization
 import std/[os, options, strutils, parseutils, strformat, tables]
 import x11/[xlib, x]
-let configPaths = [getConfigDir() / "goodwm/config.toml", "config.toml"]
+
+type
+  KeyEvents* = enum
+    keFocusUp = "focusup"
+    keFocusDown = "focusdown"
+    keMoveUp = "moveup"
+    keMoveDown = "movedown"
+    keClose = "close"
+    keNextWorkspace = "nextworkspace"
+    keLastWorkspace = "lastWorkspace"
+    keWindowToNextWorkspace = "windowToNextWorkspace"
+    keWindowToPrevWorkspace = "windowToPrevWorkspace"
+    keReloadConfig = "reloadConfig"
+    keToggleFloating = "toggleFloating"
+    keMoveToScreen = "moveToScreen"
+    keCarouselScreenForward = "carouselScreenForward"
+    keCarouselScreenBack = "carouselScreenBack"
+    keCarouselActiveForward = "carouselForward"
+    keCarouselActiveBack = "carouselBack"
+
+  KeyConfig = object
+    cmd, inputs: string
+    screen: Option[int]
+
+  ButtonConfig = object
+    btn, event: string
+
+  Config* = object
+    screenLayouts*: seq[string]
+    screenStatusBarPos*: seq[string]
+    padding*, margin*, barSize*: int
+    backgroundColor*: string
+    foregroundColor*: string
+    accentColor*: string
+    borderColor*: string
+    fontColor*: string
+    startupCommands*: seq[string]
+    keyShortcuts*: seq[KeyConfig]
+    mouseShortcuts*: seq[ButtonConfig]
 
 iterator extractSyms(s: string): string =
   var
@@ -16,11 +54,13 @@ iterator extractSyms(s: string): string =
 proc getKeySyms(s: string): (string, cuint) =
   for sym in s.extractSyms:
     case sym.toLower
-    of "alt", "Alt":
+    of "alt":
       result[1] = result[1] or Alt
-    of "shift", "Shift":
+    of "shift":
       result[1] = result[1] or Shift
-    of "super", "Super":
+    of "ctrl", "control":
+      result[1] = result[1] or Control
+    of "super", "meta":
       result[1] = result[1] or Mod4Mask
     else:
       if result[0].len > 0:
@@ -31,12 +71,14 @@ proc getKeySyms(s: string): (string, cuint) =
 proc getButtonSyms(s: string): (int, cuint) =
   for sym in s.extractSyms:
     case sym.toLower
-    of "alt", "Alt":
+    of "alt":
       result[1] = result[1] or Alt
-    of "shift", "Shift":
+    of "shift":
       result[1] = result[1] or Shift
-    of "super", "Super":
+    of "super", "meta":
       result[1] = result[1] or Mod4Mask
+    of "ctrl", "control":
+      result[1] = result[1] or Control
     else:
       result[0] = parseint(sym)
 
@@ -58,7 +100,6 @@ let
   ]
 
 
-
 proc toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shortcut) =
   result[0] = initKey(display, sym, modi)
   result[1] =
@@ -68,8 +109,17 @@ proc toKeyShortcut(display: PDisplay, modi: cuint, sym, cmd: string): (Key, Shor
       of KeyTable.low..KeyTable.high:
         initShortcut(KeyTable[enm])
       of keMoveToScreen:
-        let id = parseInt(sym)
-        initShortcut(id)
+        initShortcut(moveWindowToScreen, 0)
+      of keCarouselScreenForward:
+        initShortcut(forwardCarouselScreen, 0)
+      of keCarouselScreenBack:
+        initShortcut(backCarouselScreen, 0)
+      of keCarouselActiveForward:
+        initShortcut(forwardCarouselActive, 0)
+      of keCarouselActiveBack:
+        initShortcut(backCarouselActive, 0)
+
+
     except:
       initShortcut(cmd)
 
@@ -116,13 +166,17 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
       block findKey:
         var (keySym, modi) = getKeySyms(key.inputs)
         if keySym.len > 0:
-          let (key, shortcut) = toKeyShortcut(d.display, modi.cuint, keySym, key.cmd)
-          d.shortcuts[key] = shortcut
+          var (input, shortcut) = toKeyShortcut(d.display, modi.cuint, keySym, key.cmd)
+          if shortcut.kind in {TargettedShortcuts.low .. TargettedShortcuts.high} and
+              key.screen.isSome:
+            shortcut.targetScreen = key.screen.get - 1
+          d.shortcuts[input] = shortcut
 
   for scr in d.screens.mitems:
     scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
 
 proc loadConfig*(): Option[Config] =
+  let configPaths {.global.} = [getConfigDir() / "goodwm/config.toml", "config.toml"]
   for x in configPaths:
     if x.fileExists:
       try:
