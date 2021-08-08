@@ -161,6 +161,7 @@ proc carouselScreenForward*(d: var Desktop, id: int) =
     scr.activeWorkspace = (scr.activeWorkspace + 1 + scr.workspaces.len) mod scr.workspaces.len
     d.layoutActive()
     d.mapWindows()
+
 proc carouselScreenBackward*(d: var Desktop, id: int) =
   if id in 0..<d.screens.len:
     var scr {.byaddr.} = d.screens[id]
@@ -203,17 +204,16 @@ proc moveWindowToPrevWorkspace*(d: var Desktop) =
     d.layoutActive()
 
 proc getScreens*(d: var Desktop) =
-  d.screens.setLen(0)
   let dis = d.display
   var
     count: cint
     displays = cast[ptr UncheckedArray[XineramaScreenInfo]](XineramaQueryScreens(dis, count.addr))
+  d.screens.setLen(count)
   for x in 0..<count:
-    let
-      screen = displays[x]
-      bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float, screen.height.float)
-    d.screens.add Screen(bounds: bounds, workSpaces: newSeq[Workspace](1), barSize: 30,
-        layout: horizontalRight)
+    let screen = displays[x]
+    d.screens[x].bounds = rect(screen.xorg.float, screen.yorg.float, screen.width.float,
+        screen.height.float)
+    d.screens[x].workSpaces.setLen(max(1, d.screens[x].workSpaces.len))
   d.screens[0].isActive = true
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
@@ -230,10 +230,11 @@ func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
     d.moveFloating(ivec2(x, y))
 
 proc moveActiveWindowToScreen(d: var Desktop, i: int) =
-  if i in 0..<d.screens.len:
+  if d.hasActiveWindow:
     let wind = d.getActiveWindow()
     d.del(wind.window)
     d.screens[i].getActiveWorkspace.windows.add wind
+    d.layoutActive
 
 proc onKey*(d: var Desktop, key: Key) =
   if key in d.shortcuts:
@@ -280,9 +281,16 @@ proc drawBars*(d: var Desktop) =
     let sbW = getXWindow(scr.statusbar)
     discard XMapWindow(d.display, sbW)
     discard XRaiseWindow(d.display, sbw)
-    discard XMoveResizeWindow(d.display, sbW, 0, 0, scr.bounds.w.cuint, scr.barSize.cuint)
-    {.cast(gcSafe).}: # Some lies and deceit never hurt anyone I think
-      scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
+
+    case scr.barPos:
+    of sbpTop:
+      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, scr.bounds.y.cint,
+          scr.bounds.w.cuint, scr.barSize.cuint)
+    of sbpBot:
+      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, (scr.bounds.y -
+          scr.barSize.float).cint, scr.bounds.w.cuint, scr.barSize.cuint)
+    else: discard
+    scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
           activeWorkspace: scr.activeWorkspace))
 
 proc grabInputs*(d: var Desktop) =

@@ -127,6 +127,9 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
   if config.isSome:
     let conf = config.get
 
+    for x in conf.startupCommands:
+      discard execShellCmd(x)
+
     for x in d.screens.mitems:
       x.margin = conf.margin
       x.padding = conf.padding
@@ -171,7 +174,7 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
               key.screen.isSome:
             shortcut.targetScreen = key.screen.get - 1
           d.shortcuts[input] = shortcut
-
+  d.getScreens()
   for scr in d.screens.mitems:
     scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
 
@@ -188,6 +191,7 @@ proc loadConfig*(): Option[Config] =
 proc reloadConfig*(d: var Desktop) =
   d.mouseEvent.clear()
   d.shortcuts.clear()
+  d.getScreens()
   setupConfig(d, loadConfig())
   grabInputs(d)
   d.layoutActive()

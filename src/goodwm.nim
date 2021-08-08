@@ -49,7 +49,6 @@ proc setup(): Desktop =
     result.root = RootWindow(display, result.screen)
 
     discard XSetErrorHandler(errorHandler)
-    result.getScreens()
     discard init(InitVideo)
 
 proc run() =
@@ -90,7 +89,7 @@ proc run() =
           desktop.onPropertyChanged(ev.xproperty)
         of ClientMessage: discard
         else: discard
-      discard selector.select(100)
+      discard selector.select(-1)
   else:
     echo "Cannot open X display"
 

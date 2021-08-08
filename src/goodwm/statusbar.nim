@@ -102,16 +102,16 @@ proc drawCommand(bar: StatusBar, command: string, pos: var Vec2) =
   bar.img.fillText(font, msg, pos)
 
 proc drawBar*(bar: StatusBar, data: StatusBarData) =
-  pumpEvents()
-  var pos = vec2(0, 0)
-  bar.img.fill(bg)
-  for i, widg in bar.widgets:
-    case widg.kind
-    of wkWorkspace:
-      bar.drawWorkspaces(data.activeWorkspace, data.openWorkspaces, widg, pos)
-    of wkTime:
-      bar.drawTime("HH:mm:ss dd/MM/yy ddd", pos)
-    of wkCommand:
-      drawCommand(bar, widg.cmd, pos)
+  if bar.img != nil:
+    var pos = vec2(0, 0)
+    bar.img.fill(bg)
+    for i, widg in bar.widgets:
+      case widg.kind
+      of wkWorkspace:
+        bar.drawWorkspaces(data.activeWorkspace, data.openWorkspaces, widg, pos)
+      of wkTime:
+        bar.drawTime("HH:mm:ss dd/MM/yy ddd", pos)
+      of wkCommand:
+        drawCommand(bar, widg.cmd, pos)
 
-  bar.display
+    bar.display
