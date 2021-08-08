@@ -63,13 +63,19 @@ proc layoutVerticalDown(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.
   else:
     let
       width = freeSpace.w
-      height = freeSpace.h / count.float
+      height =
+        if padding > 0:
+          (freeSpace.h - (count.float - 1) * padding.float) / count.float
+        else:
+          (freeSpace.h.int div count).float
     var
       y = freeSpace.y
       i = 0
     while i < count:
       jield rect(freeSpace.x, y, width, height)
       y += height
+      if padding > 0:
+        y += padding.float
       inc i
 
 proc layoutHorizontalRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =

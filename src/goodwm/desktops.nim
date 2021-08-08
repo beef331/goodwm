@@ -287,8 +287,9 @@ proc drawBars*(d: var Desktop) =
       discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, scr.bounds.y.cint,
           scr.bounds.w.cuint, scr.barSize.cuint)
     of sbpBot:
-      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, (scr.bounds.y -
-          scr.barSize.float).cint, scr.bounds.w.cuint, scr.barSize.cuint)
+      let yPos = scr.bounds.y + scr.bounds.h - scr.barSize.float
+      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, yPos.cint, scr.bounds.w.cuint,
+          scr.barSize.cuint)
     else: discard
     scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
           activeWorkspace: scr.activeWorkspace))

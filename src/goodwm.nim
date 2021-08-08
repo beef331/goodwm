@@ -1,5 +1,5 @@
 import x11/[xlib, x, xutil, xatom], sdl2nim/sdl
-import std/[os, selectors]
+import std/[os, selectors, monotimes, times]
 import goodwm/[desktops, inputs, types, configs]
 
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
@@ -13,8 +13,8 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   discard XSelectInput(desktop.display, e.window, EnterWindowMask or
                                     LeaveWindowMask)
   discard XMapWindow(desktop.display, e.window)
-  #discard XSetWindowBorderWidth(desktop.display, e.window, 3)
-  #discard XSetWindowBorder(desktop.display, e.window, 4)
+  discard XSetWindowBorderWidth(desktop.display, e.window, 5)
+  discard XSetWindowBorder(desktop.display, e.window, 1)
   discard XFree(size)
 
 proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
@@ -61,9 +61,13 @@ proc run() =
     let
       selector = newSelector[pointer]()
       displayFile = ConnectionNumber(desktop.display).int
+    var lastDraw = getMonoTime()
     selector.registerHandle(displayFile, {Read}, nil)
     while true:
-      desktop.drawBars()
+      discard selector.select(-1)
+      if getMonoTime() - lastDraw > initDuration(milliseconds = 30):
+        desktop.drawBars()
+        lastDraw = getMonoTime()
       while(XPending(desktop.display) > 0):
         discard XNextEvent(desktop.display, ev.addr)
         case (ev.theType):
@@ -89,7 +93,6 @@ proc run() =
           desktop.onPropertyChanged(ev.xproperty)
         of ClientMessage: discard
         else: discard
-      discard selector.select(-1)
   else:
     echo "Cannot open X display"
 

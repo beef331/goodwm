@@ -174,6 +174,14 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
               key.screen.isSome:
             shortcut.targetScreen = key.screen.get - 1
           d.shortcuts[input] = shortcut
+
+    for i, barPos in conf.screenStatusBarPos:
+      if i in 0..d.screens.len:
+        try:
+          d.screens[i].barPos = parseEnum[StatusBarPos](barPos)
+        except:
+          sendConfigError(fmt"{barPos} is not a valid status bar position.")
+
   d.getScreens()
   for scr in d.screens.mitems:
     scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
