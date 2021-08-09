@@ -1,6 +1,6 @@
 import types, notifications, inputs, statusbar, desktops, layouts
 import toml_serialization
-import std/[os, options, strutils, parseutils, strformat, tables]
+import std/[os, osproc, options, strutils, parseutils, strformat, tables]
 import x11/[xlib, x]
 
 type
@@ -128,7 +128,7 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
     let conf = config.get
 
     for x in conf.startupCommands:
-      discard execShellCmd(x)
+      discard startProcess(x, options = {poEvalCommand, poUsePath})
 
     for x in d.screens.mitems:
       x.margin = conf.margin

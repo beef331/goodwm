@@ -14,7 +14,7 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
                                     LeaveWindowMask)
   discard XMapWindow(desktop.display, e.window)
   discard XSetWindowBorderWidth(desktop.display, e.window, 5)
-  discard XSetWindowBorder(desktop.display, e.window, 1)
+  discard XSetWindowBorder(desktop.display, e.window, 10)
   discard XFree(size)
 
 proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
