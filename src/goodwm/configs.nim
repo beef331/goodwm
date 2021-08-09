@@ -128,7 +128,7 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
     let conf = config.get
 
     for x in conf.startupCommands:
-      discard startProcess(x, options = {poEvalCommand, poUsePath})
+      discard execShellCmd(x)
 
     for x in d.screens.mitems:
       x.margin = conf.margin

@@ -151,27 +151,17 @@ proc moveToLastWorkspace*(d: var Desktop) =
   d.layoutActive()
   d.mapWindows()
 
-proc carouselScreenForward*(d: var Desktop, id: int) =
+proc carouselScreen*(d: var Desktop, id: int, dir = 1) =
   if id in 0..<d.screens.len:
     var scr {.byaddr.} = d.screens[id]
-    d.unmapWindows()
-    let emptyWs = scr.getActiveWorkspace.windows.len == 0
-    if emptyWs:
-      d.cleanWorkspace()
-    scr.activeWorkspace = (scr.activeWorkspace + 1 + scr.workspaces.len) mod scr.workspaces.len
-    d.layoutActive()
-    d.mapWindows()
-
-proc carouselScreenBackward*(d: var Desktop, id: int) =
-  if id in 0..<d.screens.len:
-    var scr {.byaddr.} = d.screens[id]
-    d.unmapWindows()
-    let emptyWs = scr.getActiveWorkspace.windows.len == 0
-    if emptyWs:
-      d.cleanWorkspace()
-    scr.activeWorkspace = (scr.activeWorkspace - 1 + scr.workspaces.len) mod scr.workspaces.len
-    d.layoutActive()
-    d.mapWindows()
+    let nextIndex = (scr.activeWorkspace + dir + scr.workspaces.len) mod scr.workspaces.len
+    if scr.workspaces[nextIndex].windows.len > 0:
+      d.unmapWindows()
+      if scr.getActiveWorkspace.windows.len == 0:
+        d.cleanWorkspace()
+      scr.activeWorkspace = nextIndex
+      d.layoutActive()
+      d.mapWindows()
 
 proc growWorkspace*(d: var Desktop) =
   d.getActiveScreen().workspaces.setLen(d.getActiveScreen().workspaces.len + 1)
@@ -250,18 +240,18 @@ proc onKey*(d: var Desktop, key: Key) =
     of moveWindowToScreen:
       d.moveActiveWindowToScreen(key.targetScreen)
     of forwardCarouselScreen:
-      d.carouselScreenForward(key.targetScreen)
+      d.carouselScreen(key.targetScreen)
     of backCarouselScreen:
-      d.carouselScreenBackward(key.targetScreen)
+      d.carouselScreen(key.targetScreen, -1)
     of forwardCarouselActive:
       for i, x in d.screens:
         if x.isActive:
-          d.carouselScreenForward(i)
+          d.carouselScreen(i)
           break
     of backCarouselActive:
       for i, x in d.screens:
         if x.isActive:
-          d.carouselScreenBackward(i)
+          d.carouselScreen(i, -1)
           break
 
 
