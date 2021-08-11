@@ -20,8 +20,8 @@ type
     tiled, floating, fullScreen
 
   ManagedWindow* = object
-    state*: WindowState
-    bounds*: pixie.Rect
+    state*, lastState*: WindowState
+    bounds*, lastBounds: pixie.Rect
     window*: x.Window
 
   Workspace* = object
@@ -114,8 +114,6 @@ type
     openWorkspaces*: int
     activeWorkspace*: int
 
-
-
 {.push inline.}
 func getActiveScreen*(d: var Desktop): var Screen =
   for x in d.screens.mitems:
@@ -134,8 +132,12 @@ func getActiveWorkspace*(d: var Desktop): var Workspace = d.getActiveScreen.getA
 func getActiveWorkspace*(s: Screen): Workspace = s.workSpaces[s.activeWorkspace]
 func getActiveWorkspace*(d: Desktop): Workspace = d.getActiveScreen.getActiveWorkSpace
 
+func getActiveWindow*(w: var Workspace): var ManagedWindow =
+  result = w.windows[w.active]
+  for x in w.windows.mitems:
+    if x.state == fullScreen:
+      return x
 
-func getActiveWindow*(w: var Workspace): var ManagedWindow = w.windows[w.active]
 func getActiveWindow*(s: var Screen): var ManagedWindow = s.getActiveWorkspace.getActiveWindow
 func getActiveWindow*(d: var Desktop): var ManagedWindow = d.getActiveScreen.getActiveWindow
 

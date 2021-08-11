@@ -101,6 +101,24 @@ func toggleFloating*(d: var Desktop) =
       else: discard
       d.layoutActive
 
+func toggleFullscreen*(d: var Desktop) =
+  if d.hasActiveWindow:
+    var wind {.byaddr.} = d.getActiveWindow
+    if wind.state != fullScreen:
+      wind.lastState = wind.state
+      wind.lastBounds = wind.bounds
+      let scr = d.getActiveScreen()
+      wind.bounds = scr.bounds
+      discard XRaiseWindow(d.display, wind.window)
+      discard XMoveResizeWindow(d.display, wind.window, cint scr.bounds.x, cint scr.bounds.y,
+          cuint scr.bounds.w, cuint scr.bounds.h)
+    else:
+      wind.state = wind.lastState
+      wind.bounds = wind.lastBounds
+      discard XLowerWindow(d.display, wind.window)
+      discard XMoveResizeWindow(d.display, wind.window, cint wind.bounds.x, cint wind.bounds.y,
+          cuint wind.bounds.w, cuint wind.bounds.h)
+
 func moveFloating(d: var Desktop, pos: Ivec2) =
   if d.hasActiveWindow and d.getActiveWindow.state == floating:
     let

@@ -10,6 +10,7 @@ type
     keMoveUp = "moveup"
     keMoveDown = "movedown"
     keClose = "close"
+    keFullScreen = "fullscreenWindow"
     keNextWorkspace = "nextworkspace"
     keLastWorkspace = "lastWorkspace"
     keWindowToNextWorkspace = "windowToNextWorkspace"
@@ -91,6 +92,7 @@ let
     keMoveUp: moveUp,
     keMoveDown: moveDown,
     keClose: killActiveWindow,
+    keFullScreen: toggleFullscreen,
     keNextWorkspace: moveToNextWorkspace,
     keLastWorkspace: movetoLastWorkspace,
     keWindowToNextWorkSpace: moveWindowToNextWorkspace,
