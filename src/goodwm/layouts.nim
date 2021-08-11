@@ -196,7 +196,7 @@ proc getLayout*(freeSpace: Rect, count, padding: int, layout: ScreenLayout): Lay
 func tiledWindows*(s: Workspace): int =
   ## Counts the tiled windows
   for w in s.windows:
-    if not w.isFloating:
+    if w.state == tiled:
       inc result
 
 func layoutActive*(d: var Desktop) =
@@ -209,7 +209,7 @@ func layoutActive*(d: var Desktop) =
           freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, scr.margin)
           layout = getLayout(freeSpace, tiledWindowCount, scr.padding, scr.layout)
         for i, w in scr.getActiveWorkspace.windows:
-          if not w.isFloating:
+          if w.state == tiled:
             let bounds = layout.getBounds()
             scr.getActiveWorkspace.windows[i].bounds = bounds
             discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,

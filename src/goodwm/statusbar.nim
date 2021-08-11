@@ -1,5 +1,6 @@
 import pixie, x11/x
-import std/[times, osproc, options, htmlparser, xmltree, strtabs, tables, strformat, parseutils, strutils]
+import std/[times, osproc, options, htmlparser, xmltree, strtabs, tables, strformat, parseutils,
+    strutils, decls]
 import sdl2nim/[sdl, sdl_syswm]
 import types
 
@@ -20,11 +21,12 @@ let
   fg = parseHex("cbccc6").rgba
 
 
-proc getFont(name: string): fonts.Font =
-  var name = name
-  name.removeSuffix({'0'..'9'})
+proc getFont(name: string): var fonts.Font =
+
   if not loadedFonts.hasKey(name):
-    let fonts = execProcess(fmt"fc-list", args = [name], options = {poUsePath})
+    var sanatizedname = name
+    sanatizedname.removeSuffix({'0'..'9'})
+    let fonts = execProcess(fmt"fc-list", args = [sanatizedname], options = {poUsePath})
     var path = ""
     discard fonts.parseUntil(path, ':')
 
@@ -32,30 +34,15 @@ proc getFont(name: string): fonts.Font =
 
   loadedFonts[name]
 
-iterator getXmlStrings(s: XmlNode): XmlString =
-  case s.kind
-  of xnText:
-    var str = XmlString()
-    str.color = fg
-    str.msg = s.innerText
-    yield str
+proc extractXmlString(s: XmlNode): XmlString =
+  if s.attrs != nil:
+    if s.attrs.hasKey "foreground":
+      result.color = parseHex(s.attrs["foreground"][1..^1]).rgba
+    if s.attrs.hasKey "font_desc":
+      result.fontDesc = s.attrs["font_desc"]
   else:
-    for x in s:
-      if x.kind != xnText:
-        var str = XmlString()
-        if x.attrs != nil:
-          if x.attrs.hasKey "foreground":
-            str.color = parseHex(x.attrs["foreground"][1..^1]).rgba
-          if x.attrs.hasKey "font_desc":
-            str.fontDesc = x.attrs["font_desc"]
-        str.msg = x.innerText
-        yield str
-      else:
-        var str = XmlString()
-        str.color = fg
-        str.msg = x.innerText
-        yield str
-
+    result.color = fg
+  result.msg = s.innerText
 
 proc display(sb: StatusBar) =
   # update texture with new pixels from surface
@@ -87,8 +74,7 @@ proc updateStatusBar*(result: var StatusBar, width, height: int, dir = sbdRight)
   result.height = height
   result.dir = dir
   result.img.fill(rgb(255, 255, 255))
-  result.widgets = @[Widget(kind: wkWorkspace, margin: 5), Widget(kind: wkTime), Widget(
-      kind: wkCommand, cmd: "rofication-status")]
+  result.widgets = @[Widget(kind: wkTime), Widget(kind: wkWorkspace, margin: 5)]
 
 proc calcMaxOffset(bar: StatusBar, wid: Widget, pos: Vec2): Option[Vec2] =
   if wid.size > 0:
@@ -135,13 +121,14 @@ proc drawWorkspaces(bar: StatusBar, active, count: int, wid: Widget, pos: var Ve
 proc drawText(bar: StatusBar, msg: string, pos: var Vec2) =
   let yOffset = bar.height / 2
   try:
-    let parsed = msg.parseHtml
-    for colTxt in parsed.getXmlStrings:
-      var font = getFont(colTxt.fontDesc)
-      font.paint = colTxt.color
-      font.size = bar.height / 2
-      bar.img.fillText(font, colTxt.msg, pos + vec2(0, yOffset.float), vAlign = vaMiddle)
-      pos.x += font.computeBounds(colTxt.msg).x
+    let
+      parsed = msg.parseHtml
+      colText = parsed.extractXmlString
+    var font {.byaddr.} = getFont(colText.fontDesc)
+    font.paint = colText.color
+    font.size = bar.height / 2
+    bar.img.fillText(font, colText.msg, pos + vec2(0, yOffset.float), vAlign = vaMiddle)
+    pos.x += font.computeBounds(colText.msg).x
   except: discard
 
 
@@ -162,7 +149,7 @@ proc drawBar*(bar: StatusBar, data: StatusBarData) =
       of wkWorkspace:
         bar.drawWorkspaces(data.activeWorkspace, data.openWorkspaces, widg, pos)
       of wkTime:
-        bar.drawTime("HH:mm:ss dd/MM/yy ddd ", pos)
+        bar.drawTime("""'<span foreground="#ffffff">' HH:mm:ss dd/MM/yy ddd '</span>'""", pos)
       of wkCommand:
         drawCommand(bar, widg.cmd, pos)
 

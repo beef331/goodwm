@@ -19,9 +19,27 @@ func del*(d: var Desktop, window: Window) =
 func addWindow*(d: var Desktop, window: Window, x, y, width, height: int, isFloating: bool) =
   for scr in d.screens.mitems:
     if scr.isActive:
-      let bounds = rect(x.float, y.float, width.float, height.float)
-      scr.getActiveWorkspace.windows.add ManagedWindow(isFloating: isFloating, window: window,
+      let
+        x =
+          if isFloating:
+            scr.bounds.x + scr.bounds.w / 2 - width / 2
+          else:
+            x.float
+        y =
+          if isFloating:
+            scr.bounds.y + scr.bounds.h / 2 - height / 2
+          else:
+            y.float
+        bounds = rect(x, y, width.float, height.float)
+        state =
+          if isFloating:
+            floating
+          else:
+            tiled
+
+      scr.getActiveWorkspace.windows.add ManagedWindow(state: state, window: window,
           bounds: bounds)
+      discard XMoveResizeWindow(d.display, window, cint x, cint y, cuint width, cuint height)
       d.layoutActive
       return
 

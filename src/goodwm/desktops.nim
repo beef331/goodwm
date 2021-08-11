@@ -45,7 +45,7 @@ func moveUp*(d: var Desktop) =
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
-        if not workspace.windows[j].isFloating:
+        if workspace.windows[j].state != floating:
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
           d.layoutActive
@@ -58,7 +58,7 @@ func moveDown*(d: var Desktop) =
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
-        if not workspace.windows[j].isFloating:
+        if workspace.windows[j].state != floating:
           swap(workspace.windows[workspace.active], workspace.windows[j])
           workspace.active = j
           d.layoutActive
@@ -71,7 +71,7 @@ func focusUp*(d: var Desktop) =
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in countdown(workspace.active - 1, 0):
-        if not workspace.windows[j].isFloating:
+        if workspace.windows[j].state != floating:
           workspace.active = j
           d.moveCursorToActive
           break
@@ -82,23 +82,27 @@ func focusDown*(d: var Desktop) =
     var workspace {.byaddr.} = d.getActiveWorkspace
     block moveWindow:
       for j in workspace.active + 1 ..< workSpace.windows.len:
-        if not workspace.windows[j].isFloating:
+        if workspace.windows[j].state != floating:
           workspace.active = j
           d.moveCursorToActive
           break
 
 func toggleFloating*(d: var Desktop) =
   if d.hasActiveWindow:
-    d.getActiveWindow.isFloating = not d.getActiveWindow.isFloating
-    let w = d.getActiveWindow.window
-    if d.getActiveWindow.isFloating:
-      discard XRaiseWindow(d.display, w)
-    else:
-      discard XLowerWindow(d.display, w)
-    d.layoutActive
+    var wind {.byaddr.} = d.getActiveWindow
+    if wind.state != fullScreen:
+      case wind.state
+      of tiled:
+        wind.state = floating
+        discard XRaiseWindow(d.display, wind.window)
+      of floating:
+        wind.state = tiled
+        discard XLowerWindow(d.display, wind.window)
+      else: discard
+      d.layoutActive
 
 func moveFloating(d: var Desktop, pos: Ivec2) =
-  if d.hasActiveWindow and d.getActiveWindow.isFloating:
+  if d.hasActiveWindow and d.getActiveWindow.state == floating:
     let
       windowBounds = d.getActiveWindow.bounds
       x = (pos.x - d.mouseXOffset).cint
@@ -109,7 +113,7 @@ func moveFloating(d: var Desktop, pos: Ivec2) =
     discard XMoveResizeWindow(d.display, d.getActiveWindow.window, x, y, w, h)
 
 func scaleFloating(d: var Desktop, pos: Ivec2) =
-  if d.hasActiveWindow and d.getActiveWindow.isFloating:
+  if d.hasActiveWindow and d.getActiveWindow.state == floating:
     let
       windowBounds = d.getActiveWindow.bounds
       w = abs(pos.x - windowBounds.x.int).cuint

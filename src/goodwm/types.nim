@@ -16,9 +16,11 @@ type
     sbpLeft = "left"
     sbpRight = "right"
 
+  WindowState* = enum
+    tiled, floating, fullScreen
 
   ManagedWindow* = object
-    isFloating*: bool
+    state*: WindowState
     bounds*: pixie.Rect
     window*: x.Window
 
