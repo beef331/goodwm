@@ -128,14 +128,14 @@ func getActiveScreen*(d: Desktop): Screen =
   result = d.screens[0]
 
 
-func getActiveWorkspace*(s: var Screen): var Workspace {.inline.} = s.workSpaces[s.activeWorkspace]
-func getActiveWorkspace*(d: var Desktop): var Workspace {.inline.} = d.getActiveScreen.getActiveWorkSpace
-func getActiveWorkspace*(s: Screen): Workspace {.inline.} = s.workSpaces[s.activeWorkspace]
-func getActiveWorkspace*(d: Desktop): Workspace {.inline.} = d.getActiveScreen.getActiveWorkSpace
+func getActiveWorkspace*(s: var Screen): var Workspace = s.workSpaces[s.activeWorkspace]
+func getActiveWorkspace*(d: var Desktop): var Workspace = d.getActiveScreen.getActiveWorkSpace
+func getActiveWorkspace*(s: Screen): Workspace = s.workSpaces[s.activeWorkspace]
+func getActiveWorkspace*(d: Desktop): Workspace = d.getActiveScreen.getActiveWorkSpace
 
-func hasActiveWindow*(w: Workspace): bool {.inline.} = w.active in 0..<w.windows.len
-func hasActiveWindow*(s: Screen): bool {.inline.} = s.getActiveWorkspace.hasActiveWindow
-func hasActiveWindow*(d: Desktop): bool {.inline.} = d.getActiveScreen.hasActiveWindow
+func hasActiveWindow*(w: Workspace): bool = w.active in 0..<w.windows.len
+func hasActiveWindow*(s: Screen): bool = s.getActiveWorkspace.hasActiveWindow
+func hasActiveWindow*(d: Desktop): bool = d.getActiveScreen.hasActiveWindow
 
 
 func getActiveWindow*(w: Workspace): ManagedWindow =
@@ -169,6 +169,7 @@ func getActiveWindow*(d: var Desktop): var ManagedWindow =
   assert d.hasActiveWindow
   d.getActiveScreen.getActiveWindow
 
-func isFullScreened*(d: Desktop or Screen): bool = d.hasActiveWindow() and d.getActiveWindow().state == fullScreen
+func isFullScreened*(d: Desktop or Screen): bool = result = d.hasActiveWindow() and
+    d.getActiveWindow().state == fullScreen
 
 {.pop.}
