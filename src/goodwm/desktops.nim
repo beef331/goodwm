@@ -21,14 +21,6 @@ func cleanWorkspace(d: var Desktop) =
     scr.activeWorkspace = min(scr.workspaces.high, scr.activeWorkspace)
     d.mapWindows()
 
-func hasActiveWindow(d: var Desktop): bool = d.getActiveWorkspace.active in
-    0..<d.getActiveWorkspace.windows.len
-
-func killActiveWindow*(d: var Desktop) =
-  ## Closes the active window
-  if d.hasActiveWindow:
-    discard XDestroyWindow(d.display, d.getActiveWindow.window)
-
 func moveCursorToActive(d: var Desktop) =
   ## Moves the cursor to the active window
   if d.hasActiveWindow:
@@ -291,20 +283,26 @@ proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
 proc drawBars*(d: var Desktop) =
   for scr in d.screens:
     let sbW = getXWindow(scr.statusbar)
-    discard XMapWindow(d.display, sbW)
-    discard XRaiseWindow(d.display, sbw)
+    if scr.isFullScreened:
+      echo "Here"
+      discard XLowerWindow(d.display, sbw)
+      let active = d.getActiveWindow()
+      discard XRaiseWindow(d.display, active.window)
+    else:
+      discard XMapWindow(d.display, sbW)
+      discard XRaiseWindow(d.display, sbw)
 
-    case scr.barPos:
-    of sbpTop:
-      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, scr.bounds.y.cint,
-          scr.bounds.w.cuint, scr.barSize.cuint)
-    of sbpBot:
-      let yPos = scr.bounds.y + scr.bounds.h - scr.barSize.float
-      discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, yPos.cint, scr.bounds.w.cuint,
-          scr.barSize.cuint)
-    else: discard
-    scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
-          activeWorkspace: scr.activeWorkspace))
+      case scr.barPos:
+      of sbpTop:
+        discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, scr.bounds.y.cint,
+            scr.bounds.w.cuint, scr.barSize.cuint)
+      of sbpBot:
+        let yPos = scr.bounds.y + scr.bounds.h - scr.barSize.float
+        discard XMoveResizeWindow(d.display, sbW, scr.bounds.x.cint, yPos.cint, scr.bounds.w.cuint,
+            scr.barSize.cuint)
+      else: discard
+      scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
+            activeWorkspace: scr.activeWorkspace))
 
 proc grabInputs*(d: var Desktop) =
   discard XUngrabKey(d.display, AnyKey, AnyModifier, d.root)

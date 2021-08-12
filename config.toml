@@ -1,61 +1,69 @@
-screenLayouts = ["alternateLeft", "verticalDown", "horizontalRight"]
-screenStatusBarPos = ["top", "top", "top"]
+screenLayouts = ["horizontalRight", "verticalDown", "horizontalRight"]
+screenStatusBarPos = ["bottom", "bottom", "top"]
 padding = 10
-margin = 10
-barSize = 20
+margin = 30
+barSize = 30
 backgroundColor = "1f2430"
 foregroundColor = "cbccc6"
 accentColor = "ffcc66"
 borderColor = "101521"
 fontColor = "707a8c"
-startupCommands = []
+startupCommands = ["/home/jason/.screenlayout/layout.sh"]
 [[keyShortcuts]]
   cmd = "rofi -show drun"
-  inputs = "p+Alt"
+  inputs = "alt+space"
 
 [[keyShortcuts]]
   cmd = "focusup"
-  inputs = "Alt+Left"
+  inputs = "alt+Left"
 
 [[keyShortcuts]]
   cmd = "focusdown"
-  inputs = "Alt+Right"
+  inputs = "alt+Right"
 
 [[keyShortcuts]]
   cmd = "moveup"
-  inputs = "Alt+Left+Shift"
+  inputs = "alt+Left+Shift"
 
 [[keyShortcuts]]
   cmd = "moveDown"
-  inputs = "Alt+Right+Shift"
+  inputs = "alt+Right+Shift"
 
 [[keyShortcuts]]
   cmd = "nextworkspace"
-  inputs = "Alt+Up"
+  inputs = "alt+Up"
 
 [[keyShortcuts]]
   cmd = "lastWorkspace"
-  inputs = "Alt+Down"
+  inputs = "alt+Down"
 
 [[keyShortcuts]]
   cmd = "windowToNextWorkspace"
-  inputs = "Alt+Shift+Up"
+  inputs = "alt+Shift+Up"
 
 [[keyShortcuts]]
   cmd = "windowToPrevWorkspace"
-  inputs = "Alt+Shift+Down"
+  inputs = "alt+Shift+Down"
 
 [[keyShortcuts]]
   cmd = "close"
-  inputs = "Alt+q"
+  inputs = "alt+q"
+
+[[keyShortcuts]]
+  cmd = "flameshot gui"
+  inputs = "ctrl+Shift+3"
 
 [[keyShortcuts]]
   cmd = "reloadConfig"
-  inputs = "Alt+Shift+r"
+  inputs = "alt+Shift+r"
 
 [[keyShortcuts]]
   cmd = "toggleFloating"
   inputs = "alt+f"
+
+[[keyShortcuts]]
+  cmd = "toggleFullscreen"
+  inputs = "alt+f+shift"
 
 [[keyShortcuts]]
   cmd = "kitty"
@@ -71,5 +79,38 @@ startupCommands = []
 
 [[keyShortcuts]]
   cmd = "moveToScreen"
-  inputs = "Alt+1"
+  inputs = "alt+Shift+1"
+  screen = 1
+[[keyShortcuts]]
+  cmd = "moveToScreen"
+  inputs = "alt+Shift+2"
+  screen = 2
+
+[[keyShortcuts]]
+  cmd = "moveToScreen"
+  inputs = "alt+Shift+3"
+  screen = 3
+
+[[keyShortcuts]]
+  cmd = "rofication-gui"
+  inputs = "alt+n"
+  screen = 3
+
+[[keyShortcuts]]
+  cmd = "carouselForward"
+  inputs = "alt+z"
+
+[[keyShortcuts]]
+  cmd = "carouselBack"
+  inputs = "alt+x"
+
+[[keyShortcuts]]
+  cmd = "carouselScreenForward"
+  inputs = "alt+1"
+  screen = 1
+
+[[keyShortcuts]]
+  cmd = "carouselScreenForward"
+  inputs = "alt+2"
+  screen = 2
 

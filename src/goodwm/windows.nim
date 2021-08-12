@@ -58,6 +58,10 @@ func mouseEnter*(d: var Desktop, w: Window) =
   ## Mouse entered a new window, ensure it's not root,
   ## then make it active
   if w != d.root:
+    if d.isFullScreened:
+      for x in d.getActiveWorkspace.windows:
+        if x.window == w:
+          return
     d.mouseState = miNone
     var i = 0
     for wind in d.getActiveWorkspace.windows.mitems:
@@ -67,3 +71,8 @@ func mouseEnter*(d: var Desktop, w: Window) =
       inc i
 
   discard XSetInputFocus(d.display, w, RevertToParent, CurrentTime)
+
+func killActiveWindow*(d: var Desktop) =
+  ## Closes the active window
+  if d.hasActiveWindow:
+    discard XDestroyWindow(d.display, d.getActiveWindow.window)

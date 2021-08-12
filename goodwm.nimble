@@ -22,7 +22,7 @@ requires "toml_serialization >= 0.2.0"
 requires "notify >= 0.1.5"
 
 task demo, "Makes and tests the binary":
-  exec "nimble build"
+  exec "nimble build -d:debug"
   try:
     exec "killall Xephyr"
   except: discard

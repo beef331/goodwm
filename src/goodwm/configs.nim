@@ -10,7 +10,7 @@ type
     keMoveUp = "moveup"
     keMoveDown = "movedown"
     keClose = "close"
-    keFullScreen = "fullscreenWindow"
+    keFullScreen = "toggleFullscreen"
     keNextWorkspace = "nextworkspace"
     keLastWorkspace = "lastWorkspace"
     keWindowToNextWorkspace = "windowToNextWorkspace"
@@ -189,7 +189,12 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
     scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
 
 proc loadConfig*(): Option[Config] =
-  let configPaths {.global.} = [getConfigDir() / "goodwm/config.toml", "config.toml"]
+  let configPaths {.global.} =
+    when defined(debug):
+      ["config.toml"]
+    else:
+      [getConfigDir() / "goodwm/config.toml", "config.toml"]
+
   for x in configPaths:
     if x.fileExists:
       try:

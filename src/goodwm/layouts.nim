@@ -202,15 +202,22 @@ func tiledWindows*(s: Workspace): int =
 func layoutActive*(d: var Desktop) =
   ## Calls the coresponding layout logic required
   for scr in d.screens.mitems:
-    let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
-    if tiledWindowCount > 0:
-      {.noSideEffect.}: # I'm a liar and a scoundrel
-        let
-          freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, scr.margin)
-          layout = getLayout(freeSpace, tiledWindowCount, scr.padding, scr.layout)
-        for i, w in scr.getActiveWorkspace.windows:
-          if w.state == tiled:
-            let bounds = layout.getBounds()
-            scr.getActiveWorkspace.windows[i].bounds = bounds
-            discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
-                bounds.w.cuint, bounds.h.cuint)
+    if scr.isFullScreened:
+      let win = scr.getActiveWindow()
+      discard XRaiseWindow(d.display, win.window)
+    else:
+      let tiledWindowCount = scr.getActiveWorkspace.tiledWindows()
+      if tiledWindowCount > 0:
+        {.noSideEffect.}: # I'm a liar and a scoundrel
+          let
+            freeSpace = calcFreeSpace(scr.bounds, scr.barPos, scr.barSize, scr.margin)
+            layout = getLayout(freeSpace, tiledWindowCount, scr.padding, scr.layout)
+          for i, w in scr.getActiveWorkspace.windows:
+            case w.state
+            of tiled:
+              let bounds = layout.getBounds()
+              scr.getActiveWorkspace.windows[i].bounds = bounds
+              discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
+                  bounds.w.cuint, bounds.h.cuint)
+            else:
+              discard XRaiseWindow(d.display, w.window)
