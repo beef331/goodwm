@@ -46,14 +46,14 @@ proc extractXmlString(s: XmlNode): XmlString =
 
 proc display(sb: StatusBar) =
   # update texture with new pixels from surface
-  var dataPtr = sb.img.data[0].unsafeaddr
   let
+    dataPtr = sb.img.data[0].unsafeaddr
     mainSurface = createRGBSurfaceFrom(dataPtr, cint sb.width, cint sb.height, cint 32, cint 4 *
       sb.width, rmask, gmask, bmask, amask)
     mainTexture = sb.renderer.createTextureFromSurface(mainSurface)
-  discard sb.renderer.renderClear
+  discard sb.renderer.renderClear()
   discard sb.renderer.renderCopy(mainTexture, nil, nil)
-  sb.renderer.renderPresent
+  sb.renderer.renderPresent()
   destroyTexture(mainTexture)
   freeSurface(mainSurface)
 
@@ -68,7 +68,7 @@ proc getXWindow*(sb: StatusBar): x.Window =
 proc updateStatusBar*(result: var StatusBar, width, height: int, dir = sbdRight) =
   if result.window.isNil:
     result.window = createWindow("Goodwm Status Bar", 0, 0, cint width, cint height, 0)
-    result.renderer = createRenderer(result.window, 0, 0)
+    result.renderer = createRenderer(result.window, -1, 0)
   result.img = newImage(width, height)
   result.width = width
   result.height = height

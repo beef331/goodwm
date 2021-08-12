@@ -218,6 +218,7 @@ proc getScreens*(d: var Desktop) =
         screen.height.float)
     d.screens[x].workSpaces.setLen(max(1, d.screens[x].workSpaces.len))
   d.screens[0].isActive = true
+  discard XFree(displays)
 
 func mouseMotion*(d: var Desktop, x, y: int32, w: Window) =
   ## On mouse motion assign the active window and change active screen
@@ -283,7 +284,6 @@ proc drawBars*(d: var Desktop) =
   for scr in d.screens:
     let sbW = getXWindow(scr.statusbar)
     if scr.isFullScreened:
-      echo "Here"
       discard XLowerWindow(d.display, sbw)
       let active = d.getActiveWindow()
       discard XRaiseWindow(d.display, active.window)
