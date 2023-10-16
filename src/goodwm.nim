@@ -1,4 +1,4 @@
-import x11/[xlib, x, xutil, xatom], sdl2nim/sdl
+import x11/[xlib, x, xutil, xatom]
 import std/[os, selectors, monotimes, times]
 import goodwm/[desktops, inputs, types, configs]
 
@@ -52,7 +52,6 @@ proc setup(): Desktop =
     result.root = RootWindow(display, result.screen)
 
     discard XSetErrorHandler(errorHandler)
-    discard init(InitVideo)
 
 proc run() =
   ##The main loop, it's main.
@@ -66,7 +65,6 @@ proc run() =
       displayFile = ConnectionNumber(desktop.display).int
     selector.registerHandle(displayFile, {Read}, nil)
     while true:
-      discard selector.select(-1)
       while(XPending(desktop.display) > 0):
         discard XNextEvent(desktop.display, ev.addr)
         case (ev.theType):
@@ -92,7 +90,6 @@ proc run() =
           desktop.onPropertyChanged(ev.xproperty)
         of ClientMessage: discard
         else: discard
-      desktop.drawBars()
 
   else:
     echo "Cannot open X display"

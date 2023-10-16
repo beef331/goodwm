@@ -1,6 +1,6 @@
 import std/tables
 import x11/[x, xlib]
-import sdl2/sdl, pixie
+import pixie
 type
   ScreenLayout* = enum
     verticalDown
@@ -34,8 +34,6 @@ type
   StatusBar* = object
     width*, height*: int
     img*: Image
-    renderer*: Renderer
-    window*: sdl.Window
     widgets*: Widgets
     dir*: StatusBarDirection
 

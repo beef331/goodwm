@@ -1,7 +1,7 @@
 import x11/[x, xinerama]
 import x11/xlib except Screen
 import std/[tables, osproc, decls]
-import bumpy, vmath, statusbar
+import bumpy, vmath
 import layouts, types, windows
 
 export windows
@@ -280,6 +280,7 @@ proc onButton*(d: var Desktop, btn: Button, pressed: bool, x, y: int) =
     elif d.mouseState == shortcut:
       d.mouseState = miNone
 
+#[
 proc drawBars*(d: var Desktop) =
   for scr in d.screens:
     let sbW = getXWindow(scr.statusbar)
@@ -302,6 +303,7 @@ proc drawBars*(d: var Desktop) =
       else: discard
       scr.statusBar.drawBar(StatusBarData(openWorkSpaces: scr.workSpaces.len,
             activeWorkspace: scr.activeWorkspace))
+]#
 
 proc grabInputs*(d: var Desktop) =
   discard XUngrabKey(d.display, AnyKey, AnyModifier, d.root)

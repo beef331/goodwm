@@ -1,12 +1,11 @@
-import bumpy, cps
+import bumpy
 import std/[options, math]
 import x11/xlib
 import types
+import slicerator
 
 type
-  LayoutIter* = ref object of Continuation
-    rect: Option[Rect]
-
+  LayoutIter* = iterator(): Rect
 
 func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, barSize, margin: int): Rect =
   result = rect
@@ -28,23 +27,9 @@ func calcFreeSpace*(rect: Rect, barPos: StatusBarPos, barSize, margin: int): Rec
   result.h -= margin.float * 2
 
 
-proc getBounds*(c: LayoutIter): Rect =
-  block:
-    var c: Continuation = c
-    while c.running and (LayoutIter c).rect.isNone:
-      c = c.fn(c)
-  if not c.dismissed:
-    if c.rect.isSome:
-      result = c.rect.get
-      c.rect = none(Rect)
-
-proc jield(c: LayoutIter, rect: Rect): LayoutIter {.cpsMagic.} =
-  c.rect = some(rect)
-  return c
-
-proc layoutVerticalUp(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutVerticalUp(freeSpace: Rect, count, padding: int): Rect =
   if count == 0:
-    jield freeSpace
+    yield freeSpace
   else:
     let
       width = freeSpace.w
@@ -53,13 +38,13 @@ proc layoutVerticalUp(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} 
       y = freeSpace.y + freeSpace.h
       i = 0
     while i < count:
-      jield rect(freeSpace.x, y, width, height)
+      yield rect(freeSpace.x, y, width, height)
       y -= height + padding.float
       inc i
 
-proc layoutVerticalDown(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutVerticalDown(freeSpace: Rect, count, padding: int): Rect =
   if count == 0:
-    jield freeSpace
+    yield freeSpace
   else:
     let
       width = freeSpace.w
@@ -72,15 +57,15 @@ proc layoutVerticalDown(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.
       y = freeSpace.y
       i = 0
     while i < count:
-      jield rect(freeSpace.x, y, width, height)
+      yield rect(freeSpace.x, y, width, height)
       y += height
       if padding > 0:
         y += padding.float
       inc i
 
-proc layoutHorizontalRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutHorizontalRight(freeSpace: Rect, count, padding: int): Rect =
   if count == 1:
-    jield freeSpace
+    yield freeSpace
   else:
     let
       width =
@@ -93,15 +78,15 @@ proc layoutHorizontalRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIt
       x = freeSpace.x
       i = 0
     while i < count:
-      jield rect(x, freeSpace.y, width, height)
+      yield rect(x, freeSpace.y, width, height)
       x += width
       if padding > 0:
         x += padding.float
       inc i
 
-proc layoutHorizontalLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutHorizontalLeft(freeSpace: Rect, count, padding: int): Rect =
   if count == 1:
-    jield freeSpace
+    yield freeSpace
   else:
     let
       width =
@@ -114,15 +99,15 @@ proc layoutHorizontalLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIte
       x = freeSpace.w - width + freeSpace.x
       i = 0
     while i < count:
-      jield rect(x, freeSpace.y, width, height)
+      yield rect(x, freeSpace.y, width, height)
       x -= width
       if padding > 0:
         x -= padding.float
       inc i
 
-proc layourAlterLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutAlterLeft(freeSpace: Rect, count, padding: int): Rect =
   if count == 1:
-    jield freeSpace
+    yield freeSpace
   else:
     var
       rect = freeSpace
@@ -135,7 +120,7 @@ proc layourAlterLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
         else:
           rect.h /= 2
           rect.h -= padding.float / 2
-      jield rect
+      yield rect
 
       if i + 1 < count:
         if i mod 2 == 0:
@@ -146,9 +131,9 @@ proc layourAlterLeft(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
       inc i
 
 
-proc layourAlterRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} =
+iterator layoutAlterRight(freeSpace: Rect, count, padding: int): Rect =
   if count == 1:
-    jield freeSpace
+    yield freeSpace
   else:
     var
       rect = freeSpace
@@ -164,7 +149,7 @@ proc layourAlterRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} 
       var properRect = rect
       properRect.x = freeSpace.w - rect.x - rect.w + freespace.x * 2
       {.warning: "Need to fix this weird offset on vertical splits".}
-      jield properRect
+      yield properRect
 
       if i + 1 < count:
         if i mod 2 == 0:
@@ -174,24 +159,20 @@ proc layourAlterRight(freeSpace: Rect, count, padding: int) {.cps: LayoutIter.} 
 
       inc i
 
-#
 proc getLayout*(freeSpace: Rect, count, padding: int, layout: ScreenLayout): LayoutIter =
-  result =
-    case layout:
-    of horizontalLeft:
-      whelp layoutHorizontalLeft(freeSpace, count, padding)
-    of horizontalRight:
-      whelp layoutHorizontalRight(freeSpace, count, padding)
-    of verticalDown:
-      whelp layoutVerticalDown(freeSpace, count, padding)
-    of verticalUp:
-      whelp layoutVerticalUp(freeSpace, count, padding)
-    of alternateLeft:
-      whelp layourAlterLeft(freeSpace, count, padding)
-    of alternateRight:
-      whelp layourAlterRight(freeSpace, count, padding)
-
-
+  case layout:
+  of horizontalLeft:
+    asClosure layoutHorizontalLeft(freeSpace, count, padding)
+  of horizontalRight:
+    asClosure layoutHorizontalRight(freeSpace, count, padding)
+  of verticalDown:
+    asClosure layoutVerticalDown(freeSpace, count, padding)
+  of verticalUp:
+    asClosure layoutVerticalUp(freeSpace, count, padding)
+  of alternateLeft:
+    asClosure layoutAlterLeft(freeSpace, count, padding)
+  of alternateRight:
+    asClosure layoutAlterRight(freeSpace, count, padding)
 
 func tiledWindows*(s: Workspace): int =
   ## Counts the tiled windows
@@ -215,7 +196,7 @@ func layoutActive*(d: var Desktop) =
           for i, w in scr.getActiveWorkspace.windows:
             case w.state
             of tiled:
-              let bounds = layout.getBounds()
+              let bounds = layout()
               scr.getActiveWorkspace.windows[i].bounds = bounds
               discard XMoveResizeWindow(d.display, w.window, bounds.x.cint, bounds.y.cint,
                   bounds.w.cuint, bounds.h.cuint)

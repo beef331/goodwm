@@ -1,4 +1,4 @@
-import types, notifications, inputs, statusbar, desktops, layouts
+import types, notifications, inputs, desktops, layouts
 import toml_serialization
 import std/[os, osproc, options, strutils, parseutils, strformat, tables]
 import x11/[xlib, x]
@@ -155,16 +155,16 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
       let
         (btn, modi) =
           try:
-              x.btn.getButtonSyms
-            except:
-              sendConfigError(fmt"{x.btn} is not a valid input")
-              continue
+            x.btn.getButtonSyms
+          except:
+            sendConfigError(fmt"{x.btn} is not a valid input")
+            continue
         event =
           try:
-              parseEnum[MouseInput](x.event)
-            except:
-              sendConfigError(fmt"{x.event} is not a valid mouse action.")
-              continue
+            parseEnum[MouseInput](x.event)
+          except:
+            sendConfigError(fmt"{x.event} is not a valid mouse action.")
+            continue
       d.mouseEvent[initButton(btn, modi)] = event
 
     for key in conf.keyShortcuts:
@@ -177,16 +177,7 @@ proc setupConfig*(d: var Desktop, config: Option[Config]) =
             shortcut.targetScreen = key.screen.get - 1
           d.shortcuts[input] = shortcut
 
-    for i, barPos in conf.screenStatusBarPos:
-      if i in 0..d.screens.len:
-        try:
-          d.screens[i].barPos = parseEnum[StatusBarPos](barPos)
-        except:
-          sendConfigError(fmt"{barPos} is not a valid status bar position.")
-
   d.getScreens()
-  for scr in d.screens.mitems:
-    scr.statusbar.updateStatusBar(scr.bounds.w.int, scr.barSize)
 
 proc loadConfig*(): Option[Config] =
   let configPaths {.global.} =

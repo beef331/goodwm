@@ -8,7 +8,6 @@ foregroundColor = "cbccc6"
 accentColor = "ffcc66"
 borderColor = "101521"
 fontColor = "707a8c"
-startupCommands = ["/home/jason/.screenlayout/layout.sh"]
 [[keyShortcuts]]
   cmd = "rofi -show drun"
   inputs = "alt+space"
