@@ -1,4 +1,4 @@
-screenLayouts = ["horizontalRight", "verticalDown", "horizontalRight"]
+screenLayouts = ["alternateLeft", "verticalDown", "horizontalRight"]
 screenStatusBarPos = ["bottom", "bottom", "top"]
 padding = 10
 margin = 30

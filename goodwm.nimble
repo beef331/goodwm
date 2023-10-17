@@ -26,8 +26,8 @@ task demo, "Makes and tests the binary":
   try:
     exec "killall Xephyr"
   except: discard
-  exec "bash Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm"
+  exec "bash -c 'Xephyr :5 -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm'"
 
 task demor, "Makes and tests the binary":
   exec "nimble build -d:danger"
-  exec "bash -c 'Xephyr :5 -softCursor -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm'"
+  exec "bash -c 'Xephyr :5 -screen 1280x720 & sleep 1; DISPLAY=:5 ./goodwm'"

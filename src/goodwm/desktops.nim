@@ -1,6 +1,6 @@
-import x11/[x, xinerama]
+import x11/[x, xinerama, xatom]
 import x11/xlib except Screen
-import std/[tables, osproc, decls]
+import std/[tables, osproc, decls, os]
 import bumpy, vmath
 import layouts, types, windows
 
@@ -103,6 +103,11 @@ func toggleFullscreen*(d: var Desktop) =
       let scr = d.getActiveScreen()
       wind.bounds = scr.bounds
       discard XRaiseWindow(d.display, wind.window)
+      let
+        wmstate   = XInternAtom(d.display, "_NET_WM_STATE", XBool true)
+        wmfullscreen = XInternAtom(d.display, "_NET_WM_STATE_FULLSCREEN", XBool true)
+
+      discard XChangeProperty(d.display, wind.window, wmState, XaAtom, 32, PropModeReplace, cast[ptr cuchar](addr wmfullscreen), 1);
     else:
       wind.state = wind.lastState
       wind.bounds = wind.lastBounds

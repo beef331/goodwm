@@ -17,6 +17,11 @@ func del*(d: var Desktop, window: Window) =
   d.layoutActive()
 
 func addWindow*(d: var Desktop, window: Window, x, y, width, height: int, isFloating: bool) =
+  for scr in d.screens:
+    for ws in scr.workspaces:
+      for wsWind in ws.windows:
+        if wsWind.window == window:
+          return
   for scr in d.screens.mitems:
     if scr.isActive:
       let

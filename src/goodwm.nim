@@ -1,6 +1,6 @@
 import x11/[xlib, x, xutil, xatom]
 import std/[os, selectors, monotimes, times]
-import goodwm/[desktops, inputs, types, configs]
+import goodwm/[desktops, inputs, types, configs, utils]
 
 proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   var
@@ -11,18 +11,20 @@ proc onMapRequest(desktop: var Desktop, e: XMapRequestEvent) =
   discard XGetWMNormalHints(desktop.display, e.window, size, addr returnMask)
   let isFloating = size.minWidth > 0 and size.minWidth == size.maxWidth and
      size.minHeight > 0 and size.minHeight == size.maxHeight
-
   desktop.addWindow(e.window, size.x, size.y, size.minWidth, size.minHeight, isFloating)
   discard XSelectInput(desktop.display, e.window, EnterWindowMask or
-                                    LeaveWindowMask)
-  discard XMapWindow(desktop.display, e.window)
-  #discard XSetWindowBorderWidth(desktop.display, e.window, 5)
-  #discard XSetWindowBorder(desktop.display, e.window, 10)
+                                    LeaveWindowMask or SubstructureNotifyMask)
   discard XFree(size)
+  discard XMapWindow(desktop.display, e.window)
+  debuginfo "window ", cast[uint](e.window)
 
-proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) = desktop.del(e.window)
+proc onWindowDestroy(desktop: var Desktop, e: XDestroyWindowEvent) =
+  debuginfo "window ", cast[uint](e.window)
+  desktop.del(e.window)
 
-proc onWindowCreate(desktop: var Desktop, e: XCreateWindowEvent) = discard
+proc onWindowCreate(desktop: var Desktop, e: XCreateWindowEvent) =
+  debuginfo "window ", cast[uint](e.window)
+
 
 proc onKeyPress(desktop: var Desktop, e: XKeyEvent) =
   desktop.onKey(initKey(e.keycode, e.state))
@@ -41,8 +43,7 @@ proc onMotion(desktop: var Desktop, e: XMotionEvent) = desktop.mouseMotion(e.x, 
 
 proc onPropertyChanged(desktop: var Desktop, e: XPropertyEvent) = discard
 
-proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint {.cdecl.} =
-  echo error.theType
+proc errorHandler(disp: PDisplay, error: PXErrorEvent): cint {.cdecl.} = discard
 
 proc setup(): Desktop =
   template display: PDisplay = result.display
@@ -65,7 +66,7 @@ proc run() =
       displayFile = ConnectionNumber(desktop.display).int
     selector.registerHandle(displayFile, {Read}, nil)
     while true:
-      while(XPending(desktop.display) > 0):
+      while(XPending(desktop.display) >= 0):
         discard XNextEvent(desktop.display, ev.addr)
         case (ev.theType):
         of DestroyNotify:
